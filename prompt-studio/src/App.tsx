@@ -33,11 +33,22 @@ interface Scene {
   id: string;
   imageText: string;
   videoText: string;
+  translatedImageText?: string;
+  translatedVideoText?: string;
   mode: "image" | "video";
   asset: string | null;
 }
 
 // --- Custom Hooks ---
+
+const PROTECTED_TERMS = [
+  "slow motion", "dolly zoom", "dolly", "tracking shot", "pan", "tilt", 
+  "pedestal", "drone", "fpv", "bokeh", "cinematic", "film", "grain", 
+  "lens", "focal length", "close up", "wide angle", "hyperlapse", 
+  "timelapse", "fps", "glitch", "vfx", "dolpy", "cgi", "rendering", 
+  "unreal engine", "octane render", "zoom", "blur", "focus", "tracking",
+  "steadycam", "gimbal"
+];
 
 const useTranslate = () => {
   const [translating, setTranslating] = useState(false);
@@ -46,13 +57,35 @@ const useTranslate = () => {
     if (!text.trim()) return text;
     setTranslating(true);
     try {
+      let processText = text;
+      const map: Record<string, string> = {};
+      let counter = 0;
+
+      // Protect technical terms (case-insensitive)
+      PROTECTED_TERMS.forEach(term => {
+        const regex = new RegExp(`\\b${term}\\b`, 'gi');
+        processText = processText.replace(regex, (match) => {
+          const placeholder = `__PT${counter}__`;
+          map[placeholder] = match;
+          counter++;
+          return placeholder;
+        });
+      });
+
       const sourceLang = toEnglish ? "es" : "en";
       const targetLang = toEnglish ? "en" : "es";
       const response = await fetch(
-        `https://lingva.ml/api/v1/${sourceLang}/${targetLang}/${encodeURIComponent(text)}`
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(processText)}`
       );
       const data = await response.json();
-      return data.translation || text;
+      let finalTranslation = data[0].map((item: any) => item[0]).join('');
+
+      // Restore technical terms
+      Object.keys(map).forEach(placeholder => {
+        finalTranslation = finalTranslation.replace(new RegExp(placeholder, 'gi'), map[placeholder]);
+      });
+
+      return finalTranslation;
     } catch (error) {
       console.error("Translation error:", error);
       return text;
@@ -282,17 +315,34 @@ const SceneCard = ({
   deleteScene,
   duplicateScene,
   onTranslate,
-  isTranslating,
 }: {
   scene: Scene;
   index: number;
   updateScene: (id: string, data: Partial<Scene>) => void;
   deleteScene: (id: string) => void;
   duplicateScene: (id: string) => void;
-  onTranslate: (id: string) => void;
-  isTranslating: boolean;
+  onTranslate: (id: string, mode: "image" | "video") => void;
 }) => {
   const isVideo = scene.mode === "video";
+  const [showTranslateImage, setShowTranslateImage] = useState(false);
+  const [showTranslateVideo, setShowTranslateVideo] = useState(false);
+
+  // Auto-translate on typing stop
+  useEffect(() => {
+    if (!scene.imageText.trim() || showTranslateImage) return;
+    const timer = setTimeout(() => {
+      onTranslate(scene.id, "image");
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [scene.imageText, scene.id, showTranslateImage, onTranslate]);
+
+  useEffect(() => {
+    if (!scene.videoText.trim() || showTranslateVideo) return;
+    const timer = setTimeout(() => {
+      onTranslate(scene.id, "video");
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [scene.videoText, scene.id, showTranslateVideo, onTranslate]);
 
   const handleFlip = () => {
     updateScene(scene.id, { mode: isVideo ? "image" : "video" });
@@ -322,13 +372,16 @@ const SceneCard = ({
               </div>
               <div>
                 <span className="block text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400/80">
-                  IMAGEN
+                  IMAGEN {showTranslateImage && <span className="text-emerald-300 ml-1">(TRADUCCIÓN)</span>}
                 </span>
                 <span className="text-[9px] text-emerald-400/40 font-bold">ID: {String(scene.id).slice(0, 8)}</span>
               </div>
             </div>
-            <div className="flex gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5">
-              <CardAction icon={Languages} onClick={() => onTranslate(scene.id)} disabled={isTranslating} color="emerald" tooltip="Traducir" />
+            <div className="flex gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5 items-center">
+              <div className="flex mr-2 bg-slate-900/50 rounded-lg p-0.5 border border-white/5">
+                <button onClick={() => setShowTranslateImage(false)} className={`px-2 py-0.5 text-[9px] font-black tracking-widest rounded transition-all ${!showTranslateImage ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-white'}`}>ES</button>
+                <button onClick={() => { setShowTranslateImage(true); if (!scene.translatedImageText) onTranslate(scene.id, "image"); }} className={`px-2 py-0.5 text-[9px] font-black tracking-widest rounded transition-all ${showTranslateImage ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-500 hover:text-white'}`}>EN</button>
+              </div>
               <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="emerald" tooltip="Insertar Vacía" />
               <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="emerald" tooltip="Girar a Video" />
               <CardAction icon={Trash2} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
@@ -338,12 +391,12 @@ const SceneCard = ({
           <div className="flex-1 relative group/textarea">
             <textarea
               className="w-full h-full bg-slate-950/40 rounded-2xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-emerald-500/40 outline-none border border-emerald-500/30 resize-none transition-all"
-              value={scene.imageText}
+              value={showTranslateImage ? (scene.translatedImageText || "Traduciendo...") : scene.imageText}
               placeholder="Prompt de imagen..."
-              onChange={(e) => updateScene(scene.id, { imageText: e.target.value })}
+              onChange={(e) => updateScene(scene.id, showTranslateImage ? { translatedImageText: e.target.value } : { imageText: e.target.value })}
             />
             <div className="absolute top-3 right-3 opacity-0 group-hover/textarea:opacity-100 transition-opacity">
-               <Copy size={14} className="text-slate-500 cursor-pointer hover:text-emerald-400" onClick={() => navigator.clipboard.writeText(scene.imageText)} />
+               <Copy size={14} className="text-slate-500 cursor-pointer hover:text-emerald-400" onClick={() => navigator.clipboard.writeText(showTranslateImage ? (scene.translatedImageText||"") : scene.imageText)} />
             </div>
           </div>
 
@@ -371,13 +424,16 @@ const SceneCard = ({
               </div>
               <div>
                 <span className="block text-[10px] font-black uppercase tracking-[0.25em] text-violet-400/80">
-                  VIDEO
+                  VIDEO {showTranslateVideo && <span className="text-violet-300 ml-1">(TRADUCCIÓN)</span>}
                 </span>
                 <span className="text-[9px] text-violet-400/40 font-bold">ID: {String(scene.id).slice(0, 8)}</span>
               </div>
             </div>
-            <div className="flex gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5">
-              <CardAction icon={Languages} onClick={() => onTranslate(scene.id)} disabled={isTranslating} color="violet" tooltip="Traducir" />
+            <div className="flex gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5 items-center">
+              <div className="flex mr-2 bg-slate-900/50 rounded-lg p-0.5 border border-white/5">
+                <button onClick={() => setShowTranslateVideo(false)} className={`px-2 py-0.5 text-[9px] font-black tracking-widest rounded transition-all ${!showTranslateVideo ? 'bg-violet-500/20 text-violet-400' : 'text-slate-500 hover:text-white'}`}>ES</button>
+                <button onClick={() => { setShowTranslateVideo(true); if (!scene.translatedVideoText) onTranslate(scene.id, "video"); }} className={`px-2 py-0.5 text-[9px] font-black tracking-widest rounded transition-all ${showTranslateVideo ? 'bg-violet-500/20 text-violet-400' : 'text-slate-500 hover:text-white'}`}>EN</button>
+              </div>
               <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="violet" tooltip="Insertar Vacía" />
               <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Girar a Imagen" />
               <CardAction icon={Trash2} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
@@ -387,12 +443,12 @@ const SceneCard = ({
           <div className="flex-1 relative group/textarea">
             <textarea
               className="w-full h-full bg-slate-950/60 rounded-2xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-violet-500/40 outline-none border border-violet-500/30 resize-none transition-all"
-              value={scene.videoText}
+              value={showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText}
               placeholder="Prompt de video..."
-              onChange={(e) => updateScene(scene.id, { videoText: e.target.value })}
+              onChange={(e) => updateScene(scene.id, showTranslateVideo ? { translatedVideoText: e.target.value } : { videoText: e.target.value })}
             />
             <div className="absolute top-3 right-3 opacity-0 group-hover/textarea:opacity-100 transition-opacity">
-               <Copy size={14} className="text-slate-500 cursor-pointer hover:text-violet-400" onClick={() => navigator.clipboard.writeText(scene.videoText)} />
+               <Copy size={14} className="text-slate-500 cursor-pointer hover:text-violet-400" onClick={() => navigator.clipboard.writeText(showTranslateVideo ? (scene.translatedVideoText||"") : scene.videoText)} />
             </div>
           </div>
 
@@ -441,7 +497,7 @@ function App() {
   const [isTranslateEn, setIsTranslateEn] = useState(false);
   const [search, setSearch] = useState("");
   const [globalMode, setGlobalMode] = useState<"image" | "video" | null>(null);
-  const { translate, translating } = useTranslate();
+  const { translate } = useTranslate();
   const { orderScenes, ordering, aiStatus } = useAIOrder();
   const { pushHistory, undo, redo, canUndo, canRedo } = useUndoRedo(scenes, saveScenes);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -723,13 +779,13 @@ function App() {
     saveScenes(newScenes);
   };
 
-  const handleTranslate = async (id: string) => {
+  const handleTranslate = async (id: string, mode: "image" | "video") => {
     const scene = scenes.find((s) => s.id === id);
     if (!scene) return;
-    const currentText = scene.mode === "video" ? scene.videoText : scene.imageText;
+    const currentText = mode === "video" ? scene.videoText : scene.imageText;
     if (!currentText.trim()) return;
     const translated = await translate(currentText, isTranslateEn);
-    updateScene(id, scene.mode === "video" ? { videoText: translated } : { imageText: translated });
+    updateScene(id, mode === "video" ? { translatedVideoText: translated } : { translatedImageText: translated });
   };
 
   const flipAll = (mode: "image" | "video") => {
@@ -1103,7 +1159,6 @@ function App() {
                     deleteScene={deleteScene} 
                     duplicateScene={duplicateScene}
                     onTranslate={handleTranslate} 
-                    isTranslating={translating} 
                   />
                 )}
               />
