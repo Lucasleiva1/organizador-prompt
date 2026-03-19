@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Plus, Trash2, GripHorizontal, ChevronLeft, ChevronRight, Upload, FileDown, Folder } from "lucide-react";
+import { X, Plus, Trash2, GripHorizontal, Upload, FileDown, Folder } from "lucide-react";
 import { Script } from "../types";
 import jsPDF from "jspdf";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { writeFile, mkdir } from "@tauri-apps/plugin-fs";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configuración del worker de PDF.js
@@ -159,8 +160,16 @@ export default function ScriptManager({ scripts, saveScripts, onClose }: ScriptM
       const targetFolder = await join(docPath, 'Prompt Studio', 'guiones');
       await mkdir(targetFolder, { recursive: true });
 
-      const fileName = `${script.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
-      const fullPath = await join(targetFolder, fileName);
+      const defaultFileName = `${script.title.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      const defaultPath = await join(targetFolder, defaultFileName);
+
+      const fullPath = await saveDialog({
+        title: "Guardar Guión PDF",
+        defaultPath: defaultPath,
+        filters: [{ name: "PDF", extensions: ["pdf"] }]
+      });
+
+      if (!fullPath) return; // User cancelled
       
       await writeFile(fullPath, new Uint8Array(pdfOutput));
       alert(`Script exportado con éxito a:\n${fullPath}`);

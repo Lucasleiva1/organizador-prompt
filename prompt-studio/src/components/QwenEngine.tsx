@@ -3,6 +3,7 @@ import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus } from 'lucide-rea
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { Scene } from '../types';
 
 interface QwenPanel {
@@ -186,8 +187,16 @@ Ejemplo de salida esperada:
       const targetFolder = await join(docPath, 'Prompt Studio', 'guiones');
       await mkdir(targetFolder, { recursive: true });
 
-      const fileName = `Qwen_Storyboard_${Date.now()}.pdf`;
-      const fullPath = await join(targetFolder, fileName);
+      const defaultFileName = `Qwen_Storyboard_${Date.now()}.pdf`;
+      const defaultPath = await join(targetFolder, defaultFileName);
+
+      const fullPath = await saveDialog({
+        title: "Guardar Storyboard PDF",
+        defaultPath: defaultPath,
+        filters: [{ name: "PDF", extensions: ["pdf"] }]
+      });
+
+      if (!fullPath) return; // User cancelled
       
       await writeFile(fullPath, new Uint8Array(pdfOutput));
       alert(`PDF exportado con éxito a:\n${fullPath}`);
