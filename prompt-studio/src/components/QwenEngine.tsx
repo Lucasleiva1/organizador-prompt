@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus } from 'lucide-react';
+import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus, Trash2, Copy } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
@@ -22,76 +22,162 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [script, setScript] = useState("");
   const [panels, setPanels] = useState<QwenPanel[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+
+  const splitScriptIntoPanels = (text: string): string[] => {
+    // Dividimos por marcadores de panel, priorizando PANEL sobre ESCENA.
+    // ESCENA se captura solo si viene seguida de contenido técnico inmediato.
+    const segments = text.split(/(?=### PANEL|PANEL #|PANEL \d+)/gi);
+    
+    return segments
+      .map(s => s.trim())
+      .filter(s => {
+        if (s.length < 10) return false;
+        // Solo aceptamos si contiene "PANEL" o al menos 2 campos técnicos
+        const hasPanelMarker = /PANEL\s*#?\d+/i.test(s);
+        const techCount = (s.match(/Composición|Encuadre|Cámara|Lente|Luz|Atmósfera|Acción|Efecto/gi) || []).length;
+        return hasPanelMarker || techCount >= 2;
+      });
+  };
+
+  const regexExtract = (text: string, fallbackScene: number): QwenPanel | null => {
+    const getVal = (label: string) => {
+      // 1. Buscamos la etiqueta ignorando asteriscos previos.
+      // 2. Capturamos TODO después del primer separador (:) o después del nombre si no hay separador.
+      // 3. Capturamos hasta el FINAL de la línea (incluyendo asteriscos de formato intermedio).
+      const reg = new RegExp(`(?:^|[\\s*#])${label}[\\s*:]+([^\\n#]+)`, 'i');
+      const m = text.match(reg);
+      if (m && m[1]) {
+        const val = m[1].replace(/\*\*/g, '').trim();
+        // Si el valor es solo un símbolo (como ":" o "::"), lo ignoramos para que use la descripción o N/A
+        if (/^[:\s\*]*$/.test(val) || (val.length < 3 && /^[^a-zA-Z0-9]+$/.test(val))) return null;
+        return val;
+      }
+      return null;
+    };
+
+
+    const comp = getVal("Composición") || getVal("Encuadre") || getVal("Plano");
+    const action = getVal("Acción") || getVal("Movimiento");
+    const camera = getVal("Cámara") || getVal("Lente") || getVal("Lentes") || getVal("Óptica");
+    const physics = getVal("Iluminación") || getVal("Atmósfera") || getVal("Efecto") || getVal("Efectos") || getVal("Luz");
+
+    if (comp || action || camera || physics) {
+      // Si la descripción está vacía, intentamos usar la Composición o incluso el Efecto
+      let finalDesc = `${comp || ""} ${action || ""}`.trim();
+      if (!finalDesc && physics) finalDesc = physics;
+      if (!finalDesc && camera) finalDesc = camera;
+
+      return {
+        scene: fallbackScene, // Forzamos el orden secuencial para evitar saltos
+        description: finalDesc || "Panel técnico",
+        optics: camera || "N/A",
+        physics: physics || "N/A",
+        timing: "3s"
+      };
+    }
+
+    // FALLBACK: Solo si el texto es descriptivo y no es un título
+    if (!text.startsWith("#") && text.trim().length > 20 && !text.toUpperCase().includes("STORYBOARD")) {
+      return {
+        scene: fallbackScene,
+        description: text.trim().split('\n')[0],
+        optics: "Extraer del texto",
+        physics: "Extraer del texto",
+        timing: "3s"
+      };
+    }
+
+    return null;
+  };
 
   const processWithQwen = async () => {
-    if (!script.trim()) return;
-    setIsProcessing(true);
-    setPanels([]);
+    console.log("ALERTA: Iniciando la función processWithQwen...");
     
-    const systemPrompt = `
-Actúa como Director de Fotografía experto. Analiza el siguiente guion y sepáralo en paneles de storyboard.
-REGLAS ESTRICTAS PARA EL JSON:
-1. Devuelve SOLO un array JSON válido, sin markdown, sin texto adicional.
-2. Cada objeto debe tener los siguientes campos:
-- "scene": Número de la escena (entero).
-- "description": Resumen de la acción (fotorrealista).
-- "optics": Especifica si es "Macro 100mm" o "Gran Angular 14mm-24mm".
-- "physics": Describe la física de partículas (ej: "Ceniza volumétrica", "Niebla densa").
-- "timing": Fase de duración (ej: "0-2s", "2-4s", "4s+").
-
-Ejemplo de salida esperada:
-[
-  {
-    "scene": 1,
-    "description": "Plano general de la ciudad cyber-punk envuelta en neblina neón.",
-    "optics": "Gran Angular 14mm-24mm",
-    "physics": "Niebla densa y lluvia volumétrica",
-    "timing": "0-2s"
-  }
-]
-    `.trim();
-
     try {
-      // Usamos 127.0.0.1 para mayor compatibilidad en Windows con Ollama
-      const response = await fetch('http://127.0.0.1:11434/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: "qwen3:0.6b",
-          prompt: `${systemPrompt}\n\nGuion:\n${script}`,
-          stream: false,
-          format: "json",
-          options: {
-            temperature: 0.2
-          }
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error("Ollama endpoint not responding properly");
+      const trimmedScript = script.trim();
+      if (!trimmedScript) {
+        alert("Por favor, pega un guion primero antes de procesar.");
+        return;
       }
 
-      const data = await response.json();
-      let parsedPanels = [];
-      try {
-        parsedPanels = JSON.parse(data.response);
-        if (!Array.isArray(parsedPanels)) {
-            parsedPanels = [parsedPanels];
+      setIsProcessing(true);
+      setPanels([]);
+      
+      const chunks = splitScriptIntoPanels(trimmedScript);
+      const finalChunks = chunks.length > 0 ? chunks : [trimmedScript];
+
+      setProgress({ current: 0, total: finalChunks.length });
+      
+      const systemPrompt = `Actúa como extractor JSON literal. REGLAS: 1. NO resumas. 2. Copia y pega Acción, Cámara e Iluminación. Salida: SOLO objeto JSON {}.`.trim();
+
+      const allPanels: QwenPanel[] = [];
+
+      for (let i = 0; i < finalChunks.length; i++) {
+        setProgress({ current: i + 1, total: finalChunks.length });
+        
+        // INTENTO 1: Regex
+        const fastResult = regexExtract(finalChunks[i], i + 1);
+        if (fastResult) {
+          allPanels.push(fastResult);
+          setPanels([...allPanels]);
+          continue;
         }
-      } catch (e) {
-        console.error("Error parsing Qwen JSON:", e);
-        // Fallback simple extract
-        const match = data.response.match(/\[.*\]/s);
-        if (match) {
-            parsedPanels = JSON.parse(match[0]);
+
+        // INTENTO 2: IA
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+        try {
+          const response = await fetch('http://127.0.0.1:11434/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model: "qwen3:0.6b",
+              prompt: `${systemPrompt}\n\nTEXTO:\n${finalChunks[i]}`,
+              stream: false,
+              format: "json",
+              options: { temperature: 0 }
+            })
+          });
+
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const data = await response.json();
+            const panel = JSON.parse(data.response);
+            if (panel) {
+              allPanels.push({
+                scene: i + 1, // Siempre forzamos el orden del bucle para evitar saltos (1, 2, 3...)
+                description: panel.description || panel.physics || "Sin descripción",
+                optics: panel.optics || "N/A",
+                physics: panel.physics || "N/A",
+                timing: panel.timing || "3s"
+              });
+              setPanels([...allPanels]);
+            }
+          }
+        } catch (e) {
+          clearTimeout(timeoutId);
+          console.warn("Fallo en panel IA:", e);
+          allPanels.push({
+            scene: i + 1,
+            description: "⚠️ Error de procesamiento o timeout.",
+            optics: "N/A",
+            physics: "N/A",
+            timing: "3s"
+          });
+          setPanels([...allPanels]);
         }
+        await new Promise(r => setTimeout(r, 400));
       }
-      setPanels(parsedPanels);
-    } catch (error) {
-      console.error("Error conectando con Qwen local:", error);
-      alert("Error conectando con Ollama (http://localhost:11434). Asegúrate de que esté corriendo y tengas el modelo.");
+    } catch (globalError) {
+      console.error("ERROR CRÍTICO EN PROCESO:", globalError);
+      alert("Error inesperado en el motor. Por favor revisa la consola.");
     } finally {
       setIsProcessing(false);
+      setProgress({ current: 0, total: 0 });
     }
   };
 
@@ -219,6 +305,18 @@ Ejemplo de salida esperada:
           </h1>
           <div className="flex items-center gap-3">
             <button 
+              onClick={() => {
+                const text = JSON.stringify(panels, null, 2);
+                navigator.clipboard.writeText(text);
+                alert("¡JSON copiado con éxito!");
+              }}
+              disabled={panels.length === 0}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-white/10 transition-all disabled:opacity-50 text-xs"
+              title="Copiar resultado como JSON"
+            >
+              <Copy size={16} /> COPIAR JSON
+            </button>
+            <button 
               onClick={exportToPDF}
               disabled={panels.length === 0 || isProcessing}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20"
@@ -244,72 +342,128 @@ Ejemplo de salida esperada:
             value={script}
             onChange={(e) => setScript(e.target.value)}
           />
-          <button 
-            onClick={processWithQwen}
-            disabled={isProcessing || !script.trim()}
-            className="absolute bottom-6 right-6 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 text-white px-6 py-3 rounded-xl flex items-center gap-3 shadow-[0_0_30px_rgba(139,92,246,0.3)] transition-all font-black tracking-widest text-sm"
-          >
-            {isProcessing ? (
-              <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> ANALIZANDO...</>
-            ) : (
-              <><BrainCircuit size={20}/> PROCESAR GUION</>
-            )}
-          </button>
-        </div>
-
-        {/* GENERATED PANELS LIST */}
-        {panels.length > 0 && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            {panels.map((p: QwenPanel, index: number) => (
-              <div key={index} className="flex flex-col lg:flex-row bg-slate-900/60 rounded-[2rem] border border-white/5 overflow-hidden shadow-2xl group hover:border-violet-500/30 transition-all duration-500">
-                {/* Visual Area (Left) */}
-                <div className="w-full lg:w-1/2 aspect-video bg-black flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent pointer-events-none" />
-                  
-                  {/* Grid Lines for reference */}
-                  <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-
-                  <ImagePlus size={48} className="text-slate-700 group-hover:text-violet-400 group-hover:scale-110 transition-all duration-500 relative z-10" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4 relative z-10">Blueprint Placeholder</span>
+          <div className="absolute bottom-6 right-6 flex items-center gap-3">
+            <button 
+              onClick={() => setScript("")}
+              disabled={isProcessing || !script.trim()}
+              className="bg-slate-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 p-3 rounded-xl transition-all border border-white/5 hover:border-red-500/30"
+              title="Borrar guion"
+            >
+              <Trash2 size={20} />
+            </button>
+            <button 
+              onClick={processWithQwen}
+              disabled={isProcessing || !script.trim()}
+              className="bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 text-white px-6 py-3 rounded-xl flex items-center gap-3 shadow-[0_0_30px_rgba(139,92,246,0.3)] transition-all font-black tracking-widest text-sm"
+            >
+              {isProcessing ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                  <span className="text-[10px] font-black tracking-widest uppercase">Analizando</span>
                 </div>
-
-                {/* Metadata Area (Right) */}
-                <div className="w-full lg:w-1/2 flex flex-col bg-slate-950/40">
-                  {/* Header */}
-                  <div className="grid grid-cols-3 bg-white/5 border-b border-white/5 text-[11px] font-black text-slate-400">
-                    <div className="p-4 border-r border-white/5 flex items-center justify-center text-slate-300">SCENE {p.scene || 1}</div>
-                    <div className="p-4 border-r border-white/5 flex items-center justify-center">SHOT {index + 1}a</div>
-                    <div className="p-4 flex justify-between items-center text-emerald-400">
-                      <span>PANEL {index + 1}</span>
-                      <CheckCircle size={14} className="opacity-50" />
+                {progress.total > 0 && (
+                  <div className="flex flex-col gap-1 w-full min-w-[120px]">
+                    <div className="flex justify-between text-[9px] font-bold text-violet-400 uppercase">
+                      <span>Procesando</span>
+                      <span>{progress.current} / {progress.total}</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-violet-500 to-emerald-500 transition-all duration-500"
+                        style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                      />
                     </div>
                   </div>
+                )}
+              </div>
+            ) : (
+                <><BrainCircuit size={20}/> PROCESAR GUION</>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* GENERATED PANELS LIST - REDESIGNED */}
+        {panels.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-20">
+            {panels.map((p: QwenPanel, index: number) => (
+              <div key={index} className="flex flex-col bg-slate-900/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-xl hover:border-violet-500/40 transition-all duration-300 group">
+                
+                {/* Image Area (Top) */}
+                <div className="aspect-video bg-black/60 relative group-hover:bg-black/40 transition-colors">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40 transition-opacity">
+                    <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
+                    <ImagePlus size={32} className="text-white" />
+                  </div>
                   
-                  {/* Description */}
-                  <div className="p-8 flex-grow flex items-center">
-                    <p className="text-slate-300 text-lg leading-relaxed italic font-serif opacity-90 group-hover:opacity-100 transition-opacity">
-                      "{p.description}"
+                  {/* Scene Tag */}
+                  <div className="absolute top-4 left-4 flex items-center gap-2">
+                    <span className="bg-violet-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg shadow-violet-900/40">
+                      SCENE {p.scene || 1}
+                    </span>
+                    <span className="bg-slate-800/80 backdrop-blur-md text-white/70 text-[10px] font-bold px-3 py-1 rounded-full border border-white/5">
+                      SHOT {index + 1}
+                    </span>
+                  </div>
+
+                  {/* Copy All Icon (Top Right) */}
+                  <button 
+                    onClick={() => {
+                      const text = `ACCIÓN: ${p.description}\nCÁMARA: ${p.optics}\nEFECTO: ${p.physics}`;
+                      navigator.clipboard.writeText(text);
+                    }}
+                    className="absolute top-4 right-4 p-2 bg-slate-800/80 backdrop-blur-md text-slate-400 hover:text-white rounded-xl border border-white/5 hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                    title="Copiar todo el panel"
+                  >
+                    <Copy size={16} />
+                  </button>
+                </div>
+
+                {/* Content Area */}
+                <div className="p-6 flex flex-col gap-5">
+                  {/* Acción */}
+                  <div className="space-y-1 group/field relative">
+                    <span className="text-[10px] font-black text-violet-400/70 uppercase tracking-[0.2em]">Acción</span>
+                    <p className="text-slate-200 text-sm leading-relaxed font-medium">
+                      {p.description || "Describiendo escena..."}
                     </p>
                   </div>
 
-                  {/* Tech Specs */}
-                  <div className="p-6 bg-black/40 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-[11px] border-t border-white/5">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Optics</span>
-                      <span className="text-violet-300 font-mono bg-violet-500/10 px-2 py-1 rounded inline-block w-fit border border-violet-500/20">{p.optics || "8K / 100mm Macro"}</span>
+                  {/* Bloques Técnicos Verticales */}
+                  <div className="space-y-4 pt-4 border-t border-white/5">
+                    <div className="space-y-1 group/field relative">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Cámara</span>
+                      <p className="text-violet-300 text-[11px] font-mono leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
+                        {p.optics || "N/A"}
+                      </p>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Physics</span>
-                      <span className="text-slate-300 font-mono truncate" title={p.physics}>{p.physics || "Standard Dynamic"}</span>
+
+                    <div className="space-y-1 group/field relative">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Efecto</span>
+                      <p className="text-emerald-400 text-[11px] font-mono leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
+                        {p.physics || "N/A"}
+                      </p>
                     </div>
-                    <div className="flex flex-col gap-1.5 md:col-span-2 lg:col-span-1 md:text-right lg:text-left">
-                      <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Timeline</span>
-                      <span className="text-amber-400 font-mono text-sm bg-amber-500/10 px-2 py-1 rounded inline-block w-fit md:ml-auto lg:ml-0 border border-amber-500/20">{p.timing || "0-2s Start"}</span>
+                  </div>
+
+                  {/* Footer Stats */}
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5 opacity-60">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                      <CheckCircle size={12} className="text-emerald-500" />
+                      <span>Listo para exportar</span>
                     </div>
+                    <span className="text-[10px] font-mono text-amber-500">{p.timing || "3s"}</span>
                   </div>
                 </div>
               </div>
             ))}
+            
+            {/* Add New Slot if empty space */}
+            <div className="flex flex-col items-center justify-center p-8 bg-slate-900/20 border-2 border-dashed border-white/5 rounded-[2.5rem] opacity-40 hover:opacity-100 transition-opacity cursor-pointer group hover:bg-violet-500/5">
+              <Plus size={32} className="text-slate-600 group-hover:text-violet-500 transition-colors mb-4" />
+              <span className="text-xs font-black text-slate-500 uppercase tracking-widest group-hover:text-violet-400 transition-colors">Añadir Panel Manual</span>
+            </div>
           </div>
         )}
       </div>
