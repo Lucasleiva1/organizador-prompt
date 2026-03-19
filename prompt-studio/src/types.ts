@@ -13,4 +13,10 @@ export interface Scene {
 export interface Workspace {
   id: string;
   theme: "normal" | "golden";
+  name?: string;
+}
+export interface Character {
+  id: string;
+  name: string;
+  asset: string;
 }

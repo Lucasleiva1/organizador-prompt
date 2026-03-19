@@ -7,6 +7,13 @@
     "core:default",
     "opener:default",
     "store:default",
-    "fs:default"
+    "fs:default",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
+    "fs:allow-desktop-read-recursive",
+    "fs:allow-desktop-write-recursive",
+    "fs:allow-document-read-recursive",
+    "fs:allow-document-write-recursive",
+    "core:path:default"
   ]
 }

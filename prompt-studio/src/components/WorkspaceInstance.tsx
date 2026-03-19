@@ -1,12 +1,14 @@
 import { useState, useRef, useMemo, useCallback } from "react";
-import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles } from "lucide-react";
+import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
 import { WorkspaceSection } from "./WorkspaceSection";
 import { SceneCard } from "./SceneCard";
+import { AssetManager } from "../utils/AssetManager";
 
 interface WorkspaceInstanceProps {
+  index: number;
   workspace: Workspace;
   scenes: Scene[];
   search: string;
@@ -15,9 +17,12 @@ interface WorkspaceInstanceProps {
   deleteScene: (id: string) => void;
   duplicateScene: (id: string) => void;
   handleTranslate: (id: string, mode: "image" | "video") => void;
+  updateWorkspaceName: (id: string, name: string) => void;
+  deleteWorkspace: (id: string) => void;
 }
 
 export const WorkspaceInstance = ({
+  index,
   workspace,
   scenes,
   search,
@@ -25,8 +30,11 @@ export const WorkspaceInstance = ({
   updateScene,
   deleteScene,
   duplicateScene,
-  handleTranslate
+  handleTranslate,
+  updateWorkspaceName,
+  deleteWorkspace
 }: WorkspaceInstanceProps) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [imageMarkdown, setImageMarkdown] = useState("");
   const [videoMarkdown, setVideoMarkdown] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,44 +162,75 @@ export const WorkspaceInstance = ({
     e.target.value = "";
   };
 
-  const handleImageRef = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageRef = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).filter(f => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+
+    const newScenes = [...scenes];
     for (const file of files) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        saveScenes([...scenes, {
+      try {
+        const fileName = await AssetManager.saveAsset(file, 'scene');
+        newScenes.push({
           id: crypto.randomUUID(),
           imageText: "",
           videoText: "",
           mode: "image",
-          asset: ev.target?.result as string,
+          asset: fileName,
           groupId: workspace.id,
           theme: workspace.theme
-        }]);
-      };
-      reader.readAsDataURL(file);
+        });
+      } catch (err) {
+        console.error("Error saving asset:", err);
+        alert("Error al guardar la imagen. Verifica los permisos del sistema.");
+      }
     }
+    
+    saveScenes(newScenes);
     e.target.value = "";
   };
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
+    
+    // 1. Check if it's a character from our bar
+    const charAsset = e.dataTransfer.getData("characterAsset");
+    if (charAsset) {
+      saveScenes([...scenes, {
+        id: crypto.randomUUID(),
+        imageText: "",
+        videoText: "",
+        mode: "image",
+        asset: charAsset,
+        groupId: workspace.id,
+        theme: workspace.theme
+      }]);
+      return;
+    }
+
+    // 2. Otherwise check for files
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+
+    const newScenes = [...scenes];
     for (const file of files) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-         saveScenes([...scenes, {
+      try {
+        const fileName = await AssetManager.saveAsset(file, 'scene');
+        newScenes.push({
           id: crypto.randomUUID(),
           imageText: "",
           videoText: "",
           mode: "image",
-          asset: ev.target?.result as string,
+          asset: fileName,
           groupId: workspace.id,
           theme: workspace.theme
-        }]);
-      };
-      reader.readAsDataURL(file);
+        });
+      } catch (err) {
+        console.error("Error saving asset:", err);
+        alert("Error al soltar la imagen. Inténtalo de nuevo.");
+      }
     }
+    
+    saveScenes(newScenes);
   }, [scenes, saveScenes, workspace.id, workspace.theme]);
 
   // Golden theme styling applied at boundary
@@ -202,6 +241,73 @@ export const WorkspaceInstance = ({
   return (
     <div className={`grid grid-cols-1 lg:grid-cols-4 gap-6 mb-16 ${containerClasses}`} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
       
+      {/* Section Header */}
+      <div className="col-span-1 lg:col-span-4 flex items-center justify-between mb-2 bg-slate-900/40 backdrop-blur-xl border border-white/5 p-4 rounded-3xl shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="px-5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+            <span className="text-emerald-400 font-black tracking-tighter text-sm">SECCIÓN #{index + 1}</span>
+          </div>
+          <div className="h-8 w-px bg-white/10" />
+          <input 
+            value={workspace.name || ""} 
+            onChange={(e) => updateWorkspaceName(workspace.id, e.target.value)}
+            placeholder="Nombre de la sección (opcional)..."
+            className="bg-transparent border-none outline-none text-slate-300 font-black text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
+          />
+        </div>
+        <button 
+          onClick={() => setShowDeleteConfirm(true)}
+          className="p-3 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all flex items-center gap-2 group"
+          title="Eliminar Sección"
+        >
+          <span className="text-[10px] font-black opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest">Eliminar</span>
+          <Trash2 size={18} />
+        </button>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDeleteConfirm(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-slate-900 border border-white/10 p-10 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] max-w-md w-full text-center"
+            >
+              <div className="w-20 h-20 bg-red-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
+                <Trash2 className="text-red-500" size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-white mb-3 tracking-tighter">¿ELIMINAR ESTA SECCIÓN?</h3>
+              <p className="text-slate-400 text-sm mb-10 font-medium leading-relaxed">
+                Se borrarán todas las escenas asociadas. Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-4 rounded-2xl bg-slate-800 text-slate-400 font-black text-[11px] uppercase tracking-widest hover:bg-slate-700 transition-all border border-white/5"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => { deleteWorkspace(workspace.id); setShowDeleteConfirm(false); }}
+                  className="flex-1 py-4 rounded-2xl bg-red-500 text-white font-black text-[11px] uppercase tracking-widest hover:bg-red-600 shadow-2xl shadow-red-500/20 transition-all"
+                >
+                  Sí, eliminar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Hidden file inputs local to this workspace */}
       <input ref={fileInputRef} type="file" accept=".txt,.md,.csv" className="hidden" onChange={handleFileImport} />
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageRef} />
@@ -318,12 +424,11 @@ export const WorkspaceInstance = ({
                 }
               }}
               renderItem={(scene: Scene, localIndex: number) => {
-                const globalIdx = scenes.findIndex(s => s.id === scene.id);
                 return (
                   <SceneCard 
                     key={scene.id} 
                     scene={scene} 
-                    index={globalIdx !== -1 ? globalIdx : localIndex} 
+                    index={localIndex} 
                     updateScene={updateScene} 
                     deleteScene={deleteScene} 
                     duplicateScene={duplicateScene}

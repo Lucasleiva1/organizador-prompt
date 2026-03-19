@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Copy, Languages, Image as ImageIcon, Clapperboard, Moon, Monitor, Sun, Plus, Sparkles, Search, LayoutGrid, MonitorPlay, Wand2, Bot, Undo2, Redo2, Trash2 } from "lucide-react";
 import { load } from "@tauri-apps/plugin-store";
 import "./App.css";
-import { Scene, Workspace } from "./types";
+import { Scene, Workspace, Character } from "./types";
 import { WorkspaceInstance } from "./components/WorkspaceInstance";
+import { CharacterBar } from "./components/CharacterBar";
+import { AssetManager } from "./utils/AssetManager";
 
 const PROTECTED_TERMS = ["slow motion", "dolly zoom", "dolly", "tracking shot", "pan", "tilt", "pedestal", "drone", "fpv", "bokeh", "cinematic", "film", "grain", "lens", "focal length", "close up", "wide angle", "hyperlapse", "timelapse", "fps", "glitch", "vfx", "dolpy", "cgi", "rendering", "unreal engine", "octane render", "zoom", "blur", "focus", "tracking", "steadycam", "gimbal"];
 
@@ -56,6 +58,7 @@ const useSceneStore = () => {
         if (mounted && loading) setLoading(false);
       }, 3000);
       try {
+        await AssetManager.init();
         const s = await load("scenes.json", { autoSave: false, defaults: { scenes: [] } });
         if (!mounted) return;
         setStore(s);
@@ -78,6 +81,97 @@ const useSceneStore = () => {
   };
   return { scenes, saveScenes, loading };
 };
+const useWorkspaceStore = () => {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [store, setStore] = useState<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const initStore = async () => {
+      try {
+        const s = await load("workspaces.json", { autoSave: false, defaults: { workspaces: [] } });
+        if (!mounted) return;
+        setStore(s);
+        const saved = await s.get<Workspace[]>("workspaces");
+        if (mounted && saved && Array.isArray(saved) && saved.length > 0) {
+          setWorkspaces(saved);
+        }
+      } catch (e) {
+        console.error("PROMPT_STUDIO: Error loading workspaces:", e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    initStore();
+    return () => { mounted = false; };
+  }, []);
+
+  const saveWorkspaces = async (newWorkspaces: Workspace[]) => {
+    setWorkspaces(newWorkspaces);
+    if (store) {
+      try { await store.set("workspaces", newWorkspaces); await store.save(); } catch (e) { console.error("Error saving workspaces:", e); }
+    }
+  };
+
+  return { workspaces, setWorkspaces: saveWorkspaces, loading };
+};
+
+const useCharacterStore = () => {
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [store, setStore] = useState<any>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const initStore = async () => {
+      try {
+        const s = await load("characters.json", { autoSave: false, defaults: { characters: [] } });
+        if (!mounted) return;
+        setStore(s);
+        const saved = await s.get<Character[]>("characters");
+        if (mounted && saved && Array.isArray(saved)) setCharacters(saved);
+      } catch (e) {
+        console.error("Error loading characters:", e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    initStore();
+    return () => { mounted = false; };
+  }, []);
+
+  const saveCharacters = async (newChars: Character[]) => {
+    setCharacters(newChars);
+    if (store) {
+      try { await store.set("characters", newChars); await store.save(); } catch (e) { console.error("Error saving characters:", e); }
+    }
+  };
+
+  const addCharacter = async (file: File) => {
+    try {
+      const fileName = await AssetManager.saveAsset(file, 'char');
+      const newChar: Character = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        asset: fileName
+      };
+      saveCharacters([...characters, newChar]);
+    } catch (err) {
+      console.error("Error adding character:", err);
+      alert("Error al subir el personaje.");
+    }
+  };
+
+  const deleteCharacter = (id: string) => {
+    if (confirm("¿Eliminar este personaje de la biblioteca?")) {
+      saveCharacters(characters.filter(c => c.id !== id));
+    }
+  };
+
+  return { characters, addCharacter, deleteCharacter, loading };
+};
+
 
 const useUndoRedo = (scenes: Scene[], saveScenes: (s: Scene[]) => void) => {
   const historyRef = useRef<Scene[][]>([]);
@@ -155,32 +249,45 @@ const NavButton = ({ icon: Icon, label, onClick, color }: any) => {
 };
 
 export default function App() {
-  const { scenes, saveScenes, loading } = useSceneStore();
+  const { scenes, saveScenes, loading: loadingScenes } = useSceneStore();
+  const { workspaces, setWorkspaces, loading: loadingWorkspaces } = useWorkspaceStore();
+  const { characters, addCharacter, deleteCharacter } = useCharacterStore();
   const [theme, setTheme] = useState<'dark' | 'inter' | 'light'>(() => (localStorage.getItem('ps-theme') as any) || 'inter');
   useEffect(() => { localStorage.setItem('ps-theme', theme); }, [theme]);
   
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
+  const [workspacesInitialized, setWorkspacesInitialized] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
-    if (!workspacesLoaded) {
-      if (scenes.length === 0) {
-        setWorkspaces([{ id: crypto.randomUUID(), theme: 'normal' }]);
-      } else {
-        const map = new Map<string, Workspace>();
-        scenes.forEach(s => {
-          const gId = s.groupId || 'default';
-          if (!map.has(gId)) map.set(gId, { id: gId, theme: s.theme || 'normal' });
-        });
-        setWorkspaces(Array.from(map.values()));
+    if (loadingScenes || loadingWorkspaces) return;
+    if (!workspacesInitialized) {
+      if (workspaces.length === 0) {
+        if (scenes.length === 0) {
+          setWorkspaces([{ id: crypto.randomUUID(), theme: 'normal' }]);
+        } else {
+          const map = new Map<string, Workspace>();
+          scenes.forEach(s => {
+            const gId = s.groupId || 'default';
+            if (!map.has(gId)) map.set(gId, { id: gId, theme: s.theme || 'normal' });
+          });
+          setWorkspaces(Array.from(map.values()));
+        }
       }
-      setWorkspacesLoaded(true);
+      setWorkspacesInitialized(true);
     }
-  }, [scenes, loading, workspacesLoaded]);
+  }, [scenes, loadingScenes, loadingWorkspaces, workspacesInitialized, workspaces]);
 
   const addWorkspace = (theme: "normal" | "golden") => {
     setWorkspaces([...workspaces, { id: crypto.randomUUID(), theme }]);
+  };
+
+  const updateWorkspaceName = (id: string, name: string) => {
+    setWorkspaces(workspaces.map(ws => ws.id === id ? { ...ws, name } : ws));
+  };
+
+  const deleteWorkspace = (id: string) => {
+    setWorkspaces(workspaces.filter(ws => ws.id !== id));
+    // Also delete all scenes belonging to this workspace
+    saveScenes(scenes.filter(s => s.groupId !== id));
   };
 
   const [isTranslateEn, setIsTranslateEn] = useState(false);
@@ -228,8 +335,13 @@ export default function App() {
   const exportAll = () => { navigator.clipboard.writeText(scenes.map((s, i) => `ESCENA #${i + 1}\\nIMAGEN: ${s.imageText || "-"}\\nVIDEO: ${s.videoText || "-"}`).join("\\n\\n---\\n\\n")); };
   const exportImages = () => { navigator.clipboard.writeText(scenes.filter(s => s.imageText.trim()).map((s, i) => `Escena ${i + 1}: ${s.imageText}`).join("\\n\\n")); };
   const exportVideos = () => { navigator.clipboard.writeText(scenes.filter(s => s.videoText.trim()).map((s, i) => `Escena ${i + 1}: ${s.videoText}`).join("\\n\\n")); };
+  const manualSave = async () => { 
+    await saveScenes(scenes); 
+    await setWorkspaces(workspaces);
+    alert("✓ Cambios guardados correctamente");
+  };
 
-  if (loading || !workspacesLoaded) {
+  if (loadingScenes || loadingWorkspaces || !workspacesInitialized) {
     return (
       <div className={`theme-${theme} min-h-screen bg-[#020617] flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-6"><div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" /><div className="text-emerald-400 font-black tracking-[0.3em] text-sm animate-pulse">PROMPT STUDIO</div></div>
@@ -268,6 +380,10 @@ export default function App() {
               <div className="w-px h-5 bg-white/5" />
               <button onClick={redo} disabled={!canRedo} className="p-2 text-slate-400 hover:text-white disabled:opacity-20 transition-all"><Redo2 size={15} /></button>
             </div>
+
+            <button onClick={manualSave} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs hover:bg-emerald-500/20 transition-all ml-1">
+              <Plus size={15} /> GUARDAR
+            </button>
           </div>
 
           <div className="flex-1 max-w-md mx-2 relative group">
@@ -305,11 +421,18 @@ export default function App() {
         </AnimatePresence>
       </nav>
 
+      <CharacterBar 
+        characters={characters} 
+        addCharacter={addCharacter} 
+        deleteCharacter={deleteCharacter} 
+      />
+
       {/* Main Workspaces Container */}
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6 pb-20 mt-8">
-        {workspaces.map((ws) => (
+        {workspaces.map((ws, idx) => (
           <WorkspaceInstance
             key={ws.id}
+            index={idx}
             workspace={ws}
             scenes={scenes}
             search={search}
@@ -318,6 +441,8 @@ export default function App() {
             deleteScene={deleteScene}
             duplicateScene={duplicateScene}
             handleTranslate={handleTranslate}
+            updateWorkspaceName={updateWorkspaceName}
+            deleteWorkspace={deleteWorkspace}
           />
         ))}
 

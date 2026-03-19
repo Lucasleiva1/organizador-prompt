@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Reorder, motion } from "framer-motion";
 import { Copy, Trash2, Plus, ArrowRightLeft, Play } from "lucide-react";
 import { Scene } from "../types";
+import { AssetManager } from "../utils/AssetManager";
 
 export const CardAction = ({ icon: Icon, onClick, onDoubleClick, disabled, color, tooltip }: any) => {
   const colors: any = {
@@ -41,6 +42,16 @@ export const SceneCard = ({
   const isVideo = scene.mode === "video";
   const [showTranslateImage, setShowTranslateImage] = useState(false);
   const [showTranslateVideo, setShowTranslateVideo] = useState(false);
+  const [assetUrl, setAssetUrl] = useState<string | undefined>(undefined);
+
+  // Resolve asset URL
+  useEffect(() => {
+    if (scene.asset) {
+      AssetManager.resolveAssetUrl(scene.asset).then(setAssetUrl);
+    } else {
+      setAssetUrl(undefined);
+    }
+  }, [scene.asset]);
 
   // Auto-translate on typing stop
   useEffect(() => {
@@ -63,6 +74,30 @@ export const SceneCard = ({
     updateScene(scene.id, { mode: isVideo ? "image" : "video" });
   };
 
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 1. Check if it's a character from our bar
+    const charAsset = e.dataTransfer.getData("characterAsset");
+    if (charAsset) {
+      updateScene(scene.id, { asset: charAsset });
+      return;
+    }
+
+    // 2. Otherwise check for files
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) {
+      try {
+        const fileName = await AssetManager.saveAsset(file, 'scene');
+        updateScene(scene.id, { asset: fileName });
+      } catch (err) {
+        console.error("Error saving asset:", err);
+        alert("Error al guardar la imagen.");
+      }
+    }
+  };
+
   return (
     <Reorder.Item
       value={scene}
@@ -77,6 +112,8 @@ export const SceneCard = ({
       >
         {/* FRONT: IMAGE MODE */}
         <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
           className={`absolute inset-0 backface-hidden rounded-[2.5rem] border-2 bg-slate-900/60 backdrop-blur-2xl p-6 flex flex-col transition-all duration-500
             ${isVideo ? "border-transparent opacity-0 pointer-events-none" : "border-emerald-500/40 shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)] opacity-100"}`}
         >
@@ -117,7 +154,7 @@ export const SceneCard = ({
 
           {scene.asset && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 relative rounded-xl overflow-hidden h-24 group/img border border-white/10">
-              <img src={scene.asset} alt="Ref" className="w-full h-full object-cover" />
+              <img src={assetUrl || scene.asset} alt="Ref" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-sm">
                 <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-2 bg-red-500 hover:bg-red-600 rounded-xl text-white shadow-xl transition-transform hover:scale-110">
                   <Trash2 size={14} />
@@ -129,6 +166,8 @@ export const SceneCard = ({
 
         {/* BACK: VIDEO MODE */}
         <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
           className={`absolute inset-0 backface-hidden rotate-y-180 rounded-[2.5rem] border-2 bg-slate-900/80 backdrop-blur-2xl p-6 flex flex-col transition-all duration-500
             ${!isVideo ? "border-transparent opacity-0 pointer-events-none" : "border-violet-500/40 shadow-[0_0_50px_-12px_rgba(139,92,246,0.2)] opacity-100"}`}
         >
