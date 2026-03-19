@@ -11,7 +11,9 @@ import {
   FileText,
   ArrowRightLeft,
   Clapperboard,
-  RotateCcw,
+  Moon,
+  Monitor,
+  Sun,
   Plus,
   Sparkles,
   Search,
@@ -20,7 +22,6 @@ import {
   Wand2,
   Bot,
   Loader2,
-  CopyPlus,
   Undo2,
   Redo2,
   Hash,
@@ -301,7 +302,8 @@ const SceneCard = ({
     <Reorder.Item
       value={scene}
       id={String(scene.id)}
-      className="relative w-full h-[400px] cursor-grab active:cursor-grabbing list-none group perspective-2000"
+      dragListener={false}
+      className="relative w-full h-[400px] cursor-default list-none group perspective-2000"
     >
       <motion.div
         animate={{ rotateY: isVideo ? 180 : 0 }}
@@ -327,7 +329,7 @@ const SceneCard = ({
             </div>
             <div className="flex gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5">
               <CardAction icon={Languages} onClick={() => onTranslate(scene.id)} disabled={isTranslating} color="emerald" tooltip="Traducir" />
-              <CardAction icon={CopyPlus} onClick={() => duplicateScene(scene.id)} color="emerald" tooltip="Duplicar" />
+              <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="emerald" tooltip="Insertar Vacía" />
               <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="emerald" tooltip="Girar a Video" />
               <CardAction icon={Trash2} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
             </div>
@@ -335,7 +337,7 @@ const SceneCard = ({
 
           <div className="flex-1 relative group/textarea">
             <textarea
-              className="w-full h-full bg-slate-950/40 rounded-2xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-emerald-500/20 outline-none border border-white/5 resize-none transition-all"
+              className="w-full h-full bg-slate-950/40 rounded-2xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-emerald-500/40 outline-none border border-emerald-500/30 resize-none transition-all"
               value={scene.imageText}
               placeholder="Prompt de imagen..."
               onChange={(e) => updateScene(scene.id, { imageText: e.target.value })}
@@ -376,7 +378,7 @@ const SceneCard = ({
             </div>
             <div className="flex gap-1 bg-slate-800/40 p-1 rounded-xl border border-white/5">
               <CardAction icon={Languages} onClick={() => onTranslate(scene.id)} disabled={isTranslating} color="violet" tooltip="Traducir" />
-              <CardAction icon={CopyPlus} onClick={() => duplicateScene(scene.id)} color="violet" tooltip="Duplicar" />
+              <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="violet" tooltip="Insertar Vacía" />
               <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Girar a Imagen" />
               <CardAction icon={Trash2} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
             </div>
@@ -384,7 +386,7 @@ const SceneCard = ({
 
           <div className="flex-1 relative group/textarea">
             <textarea
-              className="w-full h-full bg-slate-950/60 rounded-2xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-violet-500/20 outline-none border border-white/5 resize-none transition-all"
+              className="w-full h-full bg-slate-950/60 rounded-2xl p-4 text-sm text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-violet-500/40 outline-none border border-violet-500/30 resize-none transition-all"
               value={scene.videoText}
               placeholder="Prompt de video..."
               onChange={(e) => updateScene(scene.id, { videoText: e.target.value })}
@@ -429,6 +431,10 @@ const CardAction = ({ icon: Icon, onClick, onDoubleClick, disabled, color, toolt
 
 function App() {
   const { scenes, saveScenes, loading } = useSceneStore();
+  const [theme, setTheme] = useState<'dark' | 'inter' | 'light'>(() => {
+    return (localStorage.getItem('ps-theme') as any) || 'inter';
+  });
+  useEffect(() => { localStorage.setItem('ps-theme', theme); }, [theme]);
   const [imageMarkdown, setImageMarkdown] = useState("");
   const [videoMarkdown, setVideoMarkdown] = useState("");
 
@@ -711,7 +717,7 @@ function App() {
     const scene = scenes.find(s => s.id === id);
     if (!scene) return;
     const idx = scenes.indexOf(scene);
-    const clone: Scene = { ...scene, id: crypto.randomUUID() };
+    const clone: Scene = { id: crypto.randomUUID(), imageText: "", videoText: "", mode: scene.mode, asset: null };
     const newScenes = [...scenes];
     newScenes.splice(idx + 1, 0, clone);
     saveScenes(newScenes);
@@ -834,7 +840,7 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+      <div className={`theme-${theme} min-h-screen bg-[#020617] flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-6">
           <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
           <div className="text-emerald-400 font-black tracking-[0.3em] text-sm animate-pulse">PROMPT STUDIO</div>
@@ -844,7 +850,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-emerald-500/30 overflow-x-hidden" onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
+    <div className={`theme-${theme} min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-emerald-500/30 overflow-x-hidden`} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
       
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" accept=".txt,.md,.csv" className="hidden" onChange={handleFileImport} />
@@ -926,9 +932,16 @@ function App() {
             />
           </div>
 
-          {/* Mode toggle + translate */}
+          {/* Mode toggle + translate + theme */}
           <div className="flex items-center gap-2">
             <NavButton icon={Trash2} label="LIMPIAR TODO" onClick={() => { if (confirm("¿Estás seguro de eliminar todas las escenas?")) saveScenes([]); }} color="red" />
+            
+            <div className="flex items-center bg-slate-800/60 p-1 rounded-xl border border-white/5">
+              <button onClick={() => setTheme('dark')} className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`} title="Oscuro Neón"><Moon size={14}/></button>
+              <button onClick={() => setTheme('inter')} className={`p-1.5 rounded-lg transition-all ${theme === 'inter' ? 'bg-slate-700 text-cyan-300 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`} title="Intermedio"><Monitor size={14}/></button>
+              <button onClick={() => setTheme('light')} className={`p-1.5 rounded-lg transition-all ${theme === 'light' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`} title="Claro"><Sun size={14}/></button>
+            </div>
+
             <div className="flex items-center bg-slate-800/60 p-1 rounded-xl border border-white/5">
               <button 
                 onClick={() => flipAll("image")}
@@ -1117,24 +1130,10 @@ const NavButton = ({ icon: Icon, label, onClick, color }: any) => {
   );
 };
 
-const WorkspaceSection = ({ title, count, color, icon: Icon, items, onReorder, renderItem }: any) => {
-  const colors: any = {
-    emerald: "text-emerald-400 bg-emerald-500/10",
-    violet: "text-violet-400 bg-violet-500/10",
-  };
+const WorkspaceSection = ({ items, onReorder, renderItem }: any) => {
   if (items.length === 0) return null;
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-6">
-        <div className={`p-2.5 rounded-xl ${colors[color]}`}>
-          <Icon size={18} />
-        </div>
-        <div>
-          <h3 className={`text-sm font-black tracking-widest ${color === "emerald" ? "text-emerald-400" : "text-violet-400"}`}>{title}</h3>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{count} Escenas</p>
-        </div>
-        <div className="flex-1 h-[1px] bg-white/5 ml-4" />
-      </div>
+    <div className="w-full">
       <Reorder.Group axis="y" values={items} onReorder={onReorder} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {items.map((item: any, index: number) => renderItem(item, index))}
       </Reorder.Group>
