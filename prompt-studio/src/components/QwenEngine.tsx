@@ -204,9 +204,9 @@ Ejemplo de salida esperada:
     <div className="py-10">
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6">
         <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
-          <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tighter italic flex items-center gap-4">
+          <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tighter italic flex items-center gap-4 uppercase">
             <BrainCircuit className="text-violet-500" size={36} />
-            QWEN PRODUCTION ENGINE
+            Storyboard IA
           </h1>
           <div className="flex items-center gap-3">
             <button 
