@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "opener:allow-open-path",
+    "opener:allow-reveal-item-in-dir",
     "store:default",
     "fs:default",
     "fs:allow-appdata-read-recursive",
@@ -14,6 +16,7 @@
     "fs:allow-desktop-write-recursive",
     "fs:allow-document-read-recursive",
     "fs:allow-document-write-recursive",
+    "dialog:default",
     "core:path:default"
   ]
 }

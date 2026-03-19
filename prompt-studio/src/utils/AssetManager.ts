@@ -1,4 +1,4 @@
-import { writeFile, readFile, mkdir, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { writeFile, readFile, mkdir, BaseDirectory, remove } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 
 export class AssetManager {
@@ -18,6 +18,28 @@ export class AssetManager {
       });
     } catch (e) {
       console.warn('AssetManager: Assets directory initialization notice:', e);
+    }
+  }
+
+  /**
+   * Deletes an asset file from the Documents/Prompt Studio/personajes directory.
+   */
+  static async deleteAsset(fileName: string): Promise<void> {
+    if (!fileName) return;
+
+    // Don't delete URLs or Base64 (only local files)
+    if (fileName.startsWith('http') || fileName.startsWith('data:') || fileName.startsWith('blob:')) {
+      return;
+    }
+
+    try {
+      const relativePath = await join(this.NEW_ASSETS_DIR, fileName);
+      await remove(relativePath, { 
+        baseDir: BaseDirectory.Document 
+      });
+      console.log('AssetManager: Deleted asset file:', fileName);
+    } catch (e) {
+      console.warn('AssetManager: Failed to delete asset (file might not exist):', e);
     }
   }
 

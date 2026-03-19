@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useCallback } from "react";
-import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2 } from "lucide-react";
+import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
@@ -35,6 +35,7 @@ export const WorkspaceInstance = ({
   deleteWorkspace
 }: WorkspaceInstanceProps) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [imageMarkdown, setImageMarkdown] = useState("");
   const [videoMarkdown, setVideoMarkdown] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -238,6 +239,29 @@ export const WorkspaceInstance = ({
     ? 'bg-amber-500/5 !border-amber-500/20 p-6 rounded-[2rem] border-[3px] border-dashed shadow-[0_0_50px_rgba(245,158,11,0.05)]' 
     : 'border-b-[4px] border-dashed border-white/5 pb-12';
 
+  // When collapsed, show just a thin clickable row
+  if (isCollapsed) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scaleY: 0.8 }}
+        animate={{ opacity: 1, scaleY: 1 }}
+        className="col-span-full mb-4 flex items-center justify-between bg-slate-900/40 backdrop-blur-xl border border-white/5 px-5 py-3 rounded-2xl shadow-lg cursor-pointer hover:border-emerald-500/30 transition-all group"
+        onClick={() => setIsCollapsed(false)}
+      >
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+            <span className="text-emerald-400 font-black tracking-tighter text-xs">SECCIÓN #{index + 1}</span>
+          </div>
+          {workspace.name && (
+            <span className="text-slate-300 font-black text-sm uppercase tracking-wider">{workspace.name}</span>
+          )}
+          <span className="text-[10px] text-slate-500 font-medium">{localScenes.length} escena{localScenes.length !== 1 ? 's' : ''}</span>
+        </div>
+        <ChevronRight size={16} className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
+      </motion.div>
+    );
+  }
+
   return (
     <div className={`grid grid-cols-1 lg:grid-cols-4 gap-6 mb-16 ${containerClasses}`} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
       
@@ -255,14 +279,24 @@ export const WorkspaceInstance = ({
             className="bg-transparent border-none outline-none text-slate-300 font-black text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
           />
         </div>
-        <button 
-          onClick={() => setShowDeleteConfirm(true)}
-          className="p-3 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all flex items-center gap-2 group"
-          title="Eliminar Sección"
-        >
-          <span className="text-[10px] font-black opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest">Eliminar</span>
-          <Trash2 size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsCollapsed(true)}
+            className="p-3 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-2xl transition-all flex items-center gap-2 group"
+            title="Colapsar sección"
+          >
+            <span className="text-[10px] font-black opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest">Colapsar</span>
+            <ChevronDown size={18} />
+          </button>
+          <button 
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-3 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all flex items-center gap-2 group"
+            title="Eliminar Sección"
+          >
+            <span className="text-[10px] font-black opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest">Eliminar</span>
+            <Trash2 size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Delete Confirmation Modal */}

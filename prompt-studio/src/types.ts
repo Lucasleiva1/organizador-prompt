@@ -8,6 +8,10 @@ export interface Scene {
   asset: string | null;
   groupId?: string;
   theme?: "normal" | "golden";
+  sceneNumber?: number;
+  optics?: string;
+  physics?: string;
+  timing?: string;
 }
 
 export interface Workspace {
@@ -19,4 +23,10 @@ export interface Character {
   id: string;
   name: string;
   asset: string;
+}
+
+export interface Script {
+  id: string;
+  title: string;
+  content: string;
 }

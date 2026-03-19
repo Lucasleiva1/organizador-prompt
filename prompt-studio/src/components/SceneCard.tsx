@@ -89,6 +89,9 @@ export const SceneCard = ({
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("image/")) {
       try {
+        if (scene.asset) {
+          await AssetManager.deleteAsset(scene.asset);
+        }
         const fileName = await AssetManager.saveAsset(file, 'scene');
         updateScene(scene.id, { asset: fileName });
       } catch (err) {
@@ -156,7 +159,10 @@ export const SceneCard = ({
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 relative rounded-xl overflow-hidden h-24 group/img border border-white/10">
               <img src={assetUrl || scene.asset} alt="Ref" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-sm">
-                <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-2 bg-red-500 hover:bg-red-600 rounded-xl text-white shadow-xl transition-transform hover:scale-110">
+                <button onClick={async () => {
+                  if (scene.asset) await AssetManager.deleteAsset(scene.asset);
+                  updateScene(scene.id, { asset: undefined });
+                }} className="p-2 bg-red-500 hover:bg-red-600 rounded-xl text-white shadow-xl transition-transform hover:scale-110">
                   <Trash2 size={14} />
                 </button>
               </div>

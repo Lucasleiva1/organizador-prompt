@@ -101,41 +101,56 @@ export const parseMarkdownTable = (text: string, defaultSection: 'image' | 'vide
 };
 
 export const parseSimpleText = (rawText: string, mode: "image" | "video"): Scene[] => {
-  const lines = rawText.split('\n');
+  // Soporte para saltos de línea Windows/Unix
+  const lines = rawText.split(/\r?\n/);
   const chunks: string[] = [];
   let currentChunk = "";
-  const numberPattern = /^\s*(?:\*\*)?\d+[\s\.\-\)]+\s*(?:\*\*)?[A-ZÁÉÍÓÚÑ]/;
-  let inList = false;
+  
+  // Patrones robustos de separación
+  const numberPattern = /^\s*(?:\*\*)?\d+[\s\.\-\)]+/;
+  const separatorPattern = /^\s*(?:---|\*\*\*|___)\s*$/;
+  const headerPattern = /^\s*#+\s+/;
 
   for (const line of lines) {
-    if (numberPattern.test(line)) {
-      if (inList && currentChunk.trim()) {
-         chunks.push(currentChunk.trim());
+    const isNewChunk = numberPattern.test(line) || separatorPattern.test(line) || headerPattern.test(line);
+    
+    if (isNewChunk) {
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
       }
-      currentChunk = line + "\n";
-      inList = true;
+      // El separador horizontal no se incluye en el contenido
+      currentChunk = (separatorPattern.test(line)) ? "" : line + "\n";
     } else {
-      if (inList) currentChunk += line + "\n";
+      currentChunk += line + "\n";
     }
   }
-  if (inList && currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
+  
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
   }
 
+  // Si no se detectaron chunks, tratamos todo el texto como uno solo
   const finalParts = chunks.length > 0 ? chunks : [rawText.trim()];
 
-  return finalParts.map((p) => {
-    let cleaned = p.trim()
-      .replace(/^\s*(?:\*\*)?\d+[\s\.\-\)]+\s*(?:\*\*)?/, '')  
-      .replace(/^[\s🎥📸#*:]+/, '')        
-      .trim();
+  return finalParts
+    .filter(p => {
+        // Ignorar títulos muy cortos (como un simple # Título) si hay otros chunks reales
+        if (chunks.length > 1 && p.startsWith('#') && p.split('\n').length === 1) return false;
+        return p.trim().length > 0;
+    })
+    .map((p) => {
+      let cleaned = p.trim()
+        .replace(/^\s*(?:\*\*)?\d+[\s\.\-\)]+\s*(?:\*\*)?/, '')  
+        .replace(/^#+\s+/, '') // Quitar ###
+        .replace(/^[\s🎥📸*:]+/, '')        
+        .trim();
 
-    return {
-      id: crypto.randomUUID(),
-      imageText: mode === "image" ? cleaned : "",
-      videoText: mode === "video" ? cleaned : "",
-      mode: mode,
-      asset: null,
-    };
-  });
+      return {
+        id: crypto.randomUUID(),
+        imageText: mode === "image" ? cleaned : "",
+        videoText: mode === "video" ? cleaned : "",
+        mode: mode,
+        asset: null,
+      };
+    });
 };
