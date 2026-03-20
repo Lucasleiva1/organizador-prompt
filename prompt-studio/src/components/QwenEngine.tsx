@@ -198,7 +198,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             headers: { 'Content-Type': 'application/json' },
             signal: controller.signal,
             body: JSON.stringify({
-              model: "qwen3:0.6b",
+              model: "qwen2.5:3b",
               prompt: `${systemPrompt}\n\nTEXTO:\n${finalChunks[i]}`,
               stream: false,
               format: "json",
