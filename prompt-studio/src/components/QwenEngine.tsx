@@ -6,7 +6,6 @@ import { writeFile, mkdir, readDir, readFile, remove } from '@tauri-apps/plugin-
 import { save as saveDialog, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { Scene } from '../types';
 
 interface QwenPanel {
   scene: number;
@@ -17,11 +16,7 @@ interface QwenPanel {
   imageUrl?: string;
 }
 
-interface QwenEngineProps {
-  onAddGeneratedScenes: (scenes: Scene[]) => void;
-}
-
-export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) => {
+export const QwenEngine: React.FC = () => {
   const [script, setScript] = useState("");
   const [panels, setPanels] = useState<QwenPanel[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -366,23 +361,6 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     }
   };
 
-  const handleExportToWorkspace = () => {
-    if (panels.length === 0) return;
-    const newScenes: Scene[] = panels.map((p: QwenPanel): Scene => ({
-        id: crypto.randomUUID(),
-        imageText: p.description || "",
-        videoText: "",
-        mode: "image",
-        asset: p.imageUrl || projectImages[p.scene] || null,
-        theme: "normal",
-        sceneNumber: p.scene || 1,
-        optics: p.optics || "",
-        physics: p.physics || "",
-        timing: p.timing || "3s"
-    }));
-    onAddGeneratedScenes(newScenes);
-    alert(`${newScenes.length} paneles han sido añadidos a tu espacio de trabajo principal.`);
-  };
 
   const exportToPDF = async () => {
     if (panels.length === 0) return;
@@ -541,13 +519,6 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20"
             >
               <FileDown size={18} /> PDF EXPORT
-            </button>
-            <button 
-              onClick={handleExportToWorkspace}
-              disabled={panels.length === 0 || isProcessing}
-              className="flex items-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl font-bold hover:bg-slate-200 transition-all disabled:opacity-50"
-            >
-              <Plus size={18} /> AÑADIR AL WORKSPACE
             </button>
           </div>
         </div>

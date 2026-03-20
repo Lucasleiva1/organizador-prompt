@@ -420,7 +420,7 @@ export default function App() {
         deleteCharacter={deleteCharacter} 
       />
 
-      <QwenEngine onAddGeneratedScenes={(newScenes) => saveScenes([...scenes, ...newScenes])} />
+      <QwenEngine />
 
 
 
