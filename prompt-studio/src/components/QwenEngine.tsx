@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus, Trash2, Copy, FolderOpen } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
-import { writeFile, mkdir, readDir } from '@tauri-apps/plugin-fs';
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { writeFile, mkdir, readDir, readFile, remove } from '@tauri-apps/plugin-fs';
+import { save as saveDialog, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { Scene } from '../types';
@@ -29,6 +29,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [projectName, setProjectName] = useState("Sin_Nombre");
   const [projectImages, setProjectImages] = useState<Record<number, string>>({});
   const [lastScanCount, setLastScanCount] = useState<number | null>(null);
+  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
 
   // Auto-escaneo cuando cambia el nombre o hay nuevos paneles
   React.useEffect(() => {
@@ -267,12 +268,15 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
           if (numMatch) {
             const num = parseInt(numMatch[1]);
             const fullPath = await join(projectDir, entry.name);
-            newImages[num] = convertFileSrc(fullPath);
+            const src = convertFileSrc(fullPath);
+            newImages[num] = src;
+            console.log(`[STORYBOARD] Imagen detectada: Panel ${num} -> ${src}`);
           }
         }
       }
       setProjectImages(newImages);
       setLastScanCount(Object.keys(newImages).length);
+      setImageErrors({}); // Limpiamos errores previos al refrescar
       
       // Feedback opcional por consola
       console.log(`[SCAN] ${Object.keys(newImages).length} imágenes encontradas para el proyecto ${projectName}`);
@@ -291,6 +295,69 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
       await revealItemInDir(projectDir);
     } catch (e) {
       console.warn("Error al abrir la carpeta:", e);
+    }
+  };
+
+  const uploadImageForPanel = async (sceneNum: number) => {
+    try {
+      const selected = await openFileDialog({
+        multiple: false,
+        filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
+      });
+
+      if (!selected || typeof selected !== 'string') return;
+
+      const docPath = await documentDir();
+      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
+      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      await mkdir(projectDir, { recursive: true });
+
+      // Leemos el archivo original
+      const data = await readFile(selected);
+      
+      // Mantenemos la extensión original
+      const ext = selected.split('.').pop() || 'png';
+      const fileName = `${sceneNum}.${ext}`;
+      const targetPath = await join(projectDir, fileName);
+
+      // Guardamos el archivo en la carpeta de storyboard
+      await writeFile(targetPath, data);
+
+      // Actualizamos el mapa de imágenes localmente
+      const src = convertFileSrc(targetPath);
+      console.log(`[STORYBOARD] Nueva imagen subida: Panel ${sceneNum} -> ${src}`);
+      setProjectImages(prev => ({ ...prev, [sceneNum]: src }));
+      setImageErrors(prev => ({ ...prev, [sceneNum]: false })); // Reset error si existía
+      
+    } catch (e) {
+      console.error("Error al subir imagen:", e);
+      alert("Error al subir la imagen. Revisa los permisos.");
+    }
+  };
+
+  const removeImageForPanel = async (sceneNum: number) => {
+    try {
+      const docPath = await documentDir();
+      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
+      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      
+      const entries = await readDir(projectDir);
+      for (const entry of entries) {
+        if (entry.isFile && entry.name.split('.')[0] === sceneNum.toString()) {
+          const targetPath = await join(projectDir, entry.name);
+          await remove(targetPath);
+          console.log(`[STORYBOARD] Imagen eliminada: ${entry.name}`);
+        }
+      }
+
+      setProjectImages(prev => {
+        const next = { ...prev };
+        delete next[sceneNum];
+        return next;
+      });
+      setImageErrors(prev => ({ ...prev, [sceneNum]: false }));
+    } catch (e) {
+      console.error("Error al eliminar imagen:", e);
     }
   };
 
@@ -540,22 +607,26 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                 {/* Image Area (Top) */}
                 <div className="aspect-video bg-black/60 relative group-hover:bg-black/40 transition-colors">
                   <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-                    {projectImages[p.scene] ? (
+                    {(projectImages[p.scene] && !imageErrors[p.scene]) ? (
                       <img 
                         src={projectImages[p.scene]} 
                         alt={`Preview ${p.scene}`} 
+                        onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                       />
                     ) : (
                       <>
                         <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
-                        <ImagePlus size={32} className="text-white/20 group-hover:text-white/40 transition-colors" />
+                        <div className="flex flex-col items-center gap-2 opacity-20 group-hover:opacity-40 transition-opacity">
+                          <ImagePlus size={32} className="text-white" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Sin Arte</span>
+                        </div>
                       </>
                     )}
                   </div>
                   
-                  {/* Scene Tag */}
-                  <div className="absolute top-4 left-4 flex items-center gap-2">
+                  {/* Scene Tag (Existing) */}
+                  <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
                     <span className="bg-violet-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg shadow-violet-900/40">
                       SCENE {p.scene || 1}
                     </span>
@@ -564,17 +635,35 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                     </span>
                   </div>
 
-                  {/* Copy All Icon (Top Right) */}
-                  <button 
-                    onClick={() => {
-                      const text = `ACCIÓN: ${p.description}\nCÁMARA: ${p.optics}\nEFECTO: ${p.physics}`;
-                      navigator.clipboard.writeText(text);
-                    }}
-                    className="absolute top-4 right-4 p-2 bg-slate-800/80 backdrop-blur-md text-slate-400 hover:text-white rounded-xl border border-white/5 hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
-                    title="Copiar todo el panel"
-                  >
-                    <Copy size={16} />
-                  </button>
+                  {/* Manual Upload & Copy Icons (Top Right) */}
+                  <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                    <button 
+                      onClick={() => uploadImageForPanel(p.scene)}
+                      className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xl transition-all opacity-0 group-hover:opacity-100 border border-emerald-400/20"
+                      title="Subir imagen manualmente"
+                    >
+                      <ImagePlus size={16} />
+                    </button>
+                    {projectImages[p.scene] && (
+                      <button 
+                        onClick={() => removeImageForPanel(p.scene)}
+                        className="p-2 bg-rose-600/90 hover:bg-rose-500 text-white rounded-xl shadow-xl transition-all opacity-0 group-hover:opacity-100 border border-rose-400/20"
+                        title="Quitar imagen"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => {
+                        const text = `ACCIÓN: ${p.description}\nCÁMARA: ${p.optics}\nEFECTO: ${p.physics}`;
+                        navigator.clipboard.writeText(text);
+                      }}
+                      className="p-2 bg-slate-800/80 backdrop-blur-md text-slate-400 hover:text-white rounded-xl border border-white/5 hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                      title="Copiar todo el panel"
+                    >
+                      <Copy size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Content Area */}
