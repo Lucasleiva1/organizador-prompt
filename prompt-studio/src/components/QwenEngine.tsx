@@ -1,5 +1,23 @@
 import React, { useState } from 'react';
-import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus, Trash2, Copy, FolderOpen } from 'lucide-react';
+import { 
+  BrainCircuit, 
+  ImagePlus, 
+  CheckCircle, 
+  FileDown, 
+  Plus, 
+  Trash2, 
+  Copy, 
+  FolderOpen, 
+  LayoutGrid, 
+  LayoutList, 
+  View, 
+  ChevronLeft, 
+  ChevronRight,
+  Maximize2,
+  X,
+  Sparkles
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir, readDir, readFile, remove } from '@tauri-apps/plugin-fs';
@@ -16,7 +34,11 @@ interface QwenPanel {
   imageUrl?: string;
 }
 
-export const QwenEngine: React.FC = () => {
+interface QwenEngineProps {
+  onAddGeneratedScenes?: (panels: QwenPanel[]) => void;
+}
+
+export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) => {
   const [script, setScript] = useState("");
   const [panels, setPanels] = useState<QwenPanel[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -25,6 +47,9 @@ export const QwenEngine: React.FC = () => {
   const [projectImages, setProjectImages] = useState<Record<number, string>>({});
   const [lastScanCount, setLastScanCount] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+  const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Auto-escaneo cuando cambia el nombre o hay nuevos paneles
   React.useEffect(() => {
@@ -458,237 +483,494 @@ export const QwenEngine: React.FC = () => {
     }
   };
 
+  const handleAddToWorkspace = () => {
+    if (onAddGeneratedScenes && panels.length > 0) {
+      onAddGeneratedScenes(panels);
+    } else if (panels.length === 0) {
+      alert("No hay paneles generados para añadir.");
+    } else {
+      alert("Error: La conexión con el Espacio de Trabajo no está activa.");
+    }
+  };
+
   return (
     <div className="py-10">
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6">
-        <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
-          <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tighter italic flex items-center gap-4 uppercase">
-            <BrainCircuit className="text-violet-500" size={36} />
-            Storyboard IA
-          </h1>
+        
+        {/* HEADER SECTION */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 border-b border-white/10 pb-8 gap-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tighter italic flex items-center gap-4 uppercase">
+              <div className="relative">
+                <BrainCircuit className="text-violet-500" size={36} />
+                <div className="absolute -inset-2 bg-violet-500/20 blur-xl rounded-full animate-pulse" />
+              </div>
+              Storyboard IA
+            </h1>
+            <p className="text-slate-500 text-[10px] font-black tracking-[0.3em] uppercase ml-14">Orquestador de Guiones Visuales</p>
+          </div>
 
-          <div className="flex items-center gap-4 bg-slate-900/50 p-2 rounded-2xl border border-white/5">
-            <div className="flex flex-col px-2">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Proyecto</span>
+          <div className="flex flex-wrap items-center gap-4 bg-slate-900/50 p-2.5 rounded-[2rem] border border-white/5 backdrop-blur-md">
+            {/* Proyecto Selector */}
+            <div className="flex flex-col px-4 border-r border-white/10">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Proyecto Activo</span>
               <input 
                 type="text" 
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                className="bg-transparent text-white font-bold text-sm outline-none border-b border-white/10 focus:border-violet-500 transition-colors w-32"
-                placeholder="Nombre del proyecto..."
+                className="bg-transparent text-white font-bold text-sm outline-none border-none focus:ring-0 transition-colors w-32"
+                placeholder="PROYECTO_ALPHA"
               />
             </div>
-            <button 
-              onClick={scanProjectImages}
-              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-violet-900/40 relative overflow-hidden group/refresh"
-              title="Refrescar imágenes de la carpeta"
-            >
-              <ImagePlus size={18} className="group-hover/refresh:scale-110 transition-transform" />
-              <span className="text-xs uppercase font-black tracking-widest">Refrescar Imágenes</span>
-              {lastScanCount !== null && (
-                <span className="absolute -top-1 -right-1 bg-emerald-500 text-[8px] px-1.5 py-0.5 rounded-full border border-slate-900">
-                  {lastScanCount}
-                </span>
-              )}
-            </button>
-            <button 
-              onClick={openProjectFolder}
-              className="p-3 bg-slate-800 hover:bg-white/10 text-slate-300 rounded-xl transition-all border border-white/5"
-              title="Abrir carpeta de imágenes del proyecto"
-            >
-              <FolderOpen size={20} />
-            </button>
-          </div>
 
-          <div className="flex items-center gap-3">
+            {/* View Mode Selectors */}
+            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                title="Vista en Rejilla"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('vertical')}
+                className={`p-2 rounded-lg transition-all ${viewMode === 'vertical' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                title="Vista Vertical"
+              >
+                <LayoutList size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('carousel')}
+                className={`p-2 rounded-lg transition-all ${viewMode === 'carousel' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                title="Vista Carrusel"
+              >
+                <View size={16} />
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={scanProjectImages}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all border border-white/5 group/refresh"
+                title="Escanear archivos locales"
+              >
+                <ImagePlus size={16} className="group-hover/refresh:rotate-12 transition-transform" />
+                <span className="text-[10px] uppercase font-black tracking-widest hidden sm:block">Escanear</span>
+                {lastScanCount !== null && (
+                  <span className="bg-emerald-500 text-[8px] px-1.5 py-0.5 rounded-full border border-slate-900 ml-1">
+                    {lastScanCount}
+                  </span>
+                )}
+              </button>
+              <button 
+                onClick={openProjectFolder}
+                className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                title="Abrir carpeta raíz"
+              >
+                <FolderOpen size={18} />
+              </button>
+            </div>
+
+            <div className="w-px h-8 bg-white/10 mx-1" />
+
             <button 
-              onClick={() => {
-                const text = JSON.stringify(panels, null, 2);
-                navigator.clipboard.writeText(text);
-                alert("¡JSON copiado con éxito!");
-              }}
-              disabled={panels.length === 0}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold border border-white/10 transition-all disabled:opacity-50 text-xs"
-              title="Copiar resultado como JSON"
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-violet-900/30 group/new"
             >
-              <Copy size={16} /> COPIAR JSON
-            </button>
-            <button 
-              onClick={exportToPDF}
-              disabled={panels.length === 0 || isProcessing}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20"
-            >
-              <FileDown size={18} /> PDF EXPORT
+              <Plus size={18} className="group-hover/new:rotate-90 transition-transform duration-300" />
+              <span className="text-[10px] uppercase font-black tracking-widest">Nuevo Guion</span>
             </button>
           </div>
         </div>
 
-        {/* INPUT AREA */}
-        <div className="mb-12 relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 to-emerald-600 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-          <textarea 
-            className="relative w-full h-48 bg-slate-900/80 border border-white/10 rounded-3xl p-8 text-slate-200 text-lg focus:ring-2 focus:ring-violet-500/50 outline-none backdrop-blur-xl resize-none custom-scrollbar"
-            placeholder="Pega tu guion aquí para que Qwen lo organice en un storyboard técnico..."
-            value={script}
-            onChange={(e) => setScript(e.target.value)}
-          />
-          <div className="absolute bottom-6 right-6 flex items-center gap-3">
+        {/* EMPTY STATE OR MAIN CONTENT */}
+        {panels.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-32 bg-slate-900/20 border-2 border-dashed border-white/5 rounded-[3rem] group hover:border-violet-500/20 transition-all duration-700">
+            <div className="relative mb-8">
+              <div className="absolute -inset-4 bg-violet-500/10 blur-2xl rounded-full scale-150 animate-pulse" />
+              <BrainCircuit className="text-slate-700 relative z-10" size={64} />
+            </div>
+            <h3 className="text-2xl font-bold text-slate-400 mb-2">Motor de IA Inactivo</h3>
+            <p className="text-slate-500 text-sm mb-8 text-center max-w-md">
+              Crea un nuevo guion o importa uno existente para que Qwen genere el storyboard técnico automáticamente.
+            </p>
             <button 
-              onClick={() => setScript("")}
-              disabled={isProcessing || !script.trim()}
-              className="bg-slate-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 p-3 rounded-xl transition-all border border-white/5 hover:border-red-500/30"
-              title="Borrar guion"
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-3 bg-white/5 hover:bg-white/10 text-white px-8 py-4 rounded-2xl font-black text-xs tracking-[0.2em] uppercase border border-white/10 transition-all hover:scale-105 active:scale-95 shadow-2xl"
             >
-              <Trash2 size={20} />
+              <Sparkles size={18} className="text-violet-400" /> Comenzar Ahora
             </button>
-            <button 
-              onClick={processWithQwen}
-              disabled={isProcessing || !script.trim()}
-              className="bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 text-white px-6 py-3 rounded-xl flex items-center gap-3 shadow-[0_0_30px_rgba(139,92,246,0.3)] transition-all font-black tracking-widest text-sm"
-            >
-              {isProcessing ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
-                  <span className="text-[10px] font-black tracking-widest uppercase">Analizando</span>
-                </div>
-                {progress.total > 0 && (
-                  <div className="flex flex-col gap-1 w-full min-w-[120px]">
-                    <div className="flex justify-between text-[9px] font-bold text-violet-400 uppercase">
-                      <span>Procesando</span>
-                      <span>{progress.current} / {progress.total}</span>
-                    </div>
-                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-violet-500 to-emerald-500 transition-all duration-500"
-                        style={{ width: `${(progress.current / progress.total) * 100}%` }}
-                      />
-                    </div>
+          </div>
+        ) : (
+          <div className="space-y-12">
+            
+            {/* VIEW MODES RENDERING */}
+            {viewMode === 'grid' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-20">
+                {panels.map((p, index) => (
+                  <PanelCard 
+                    key={index} 
+                    panel={p} 
+                    index={index} 
+                    image={projectImages[p.scene]}
+                    hasError={imageErrors[p.scene]}
+                    onUpload={uploadImageForPanel}
+                    onRemove={removeImageForPanel}
+                    onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
+                  />
+                ))}
+                <AddNewSlot onClick={() => setIsModalOpen(true)} />
+              </div>
+            )}
+
+            {viewMode === 'vertical' && (
+              <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-20 max-w-5xl mx-auto">
+                {panels.map((p, index) => (
+                  <PanelCard 
+                    key={index} 
+                    panel={p} 
+                    index={index} 
+                    image={projectImages[p.scene]}
+                    hasError={imageErrors[p.scene]}
+                    onUpload={uploadImageForPanel}
+                    onRemove={removeImageForPanel}
+                    onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
+                    isVertical
+                  />
+                ))}
+                <AddNewSlot onClick={() => setIsModalOpen(true)} isVertical />
+              </div>
+            )}
+
+            {viewMode === 'carousel' && (
+              <div className="relative animate-in fade-in duration-700 pb-20 overflow-hidden">
+                <div className="flex items-center justify-center gap-8 px-12">
+                  <button 
+                    onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                    disabled={currentIndex === 0}
+                    className="p-4 bg-slate-900 border border-white/10 rounded-full text-white disabled:opacity-20 hover:bg-violet-600 transition-all z-20 shadow-2xl"
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+
+                  <div className="flex-1 max-w-4xl relative min-h-[500px] flex items-center justify-center">
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={currentIndex}
+                        initial={{ opacity: 0, scale: 0.9, x: 100 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, x: -100 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="w-full"
+                      >
+                        <PanelCard 
+                          panel={panels[currentIndex]} 
+                          index={currentIndex} 
+                          image={projectImages[panels[currentIndex].scene]}
+                          hasError={imageErrors[panels[currentIndex].scene]}
+                          onUpload={uploadImageForPanel}
+                          onRemove={removeImageForPanel}
+                          onError={() => setImageErrors(prev => ({ ...prev, [panels[currentIndex].scene]: true }))}
+                          isCarousel
+                        />
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
+
+                  <button 
+                    onClick={() => setCurrentIndex(prev => Math.min(panels.length - 1, prev + 1))}
+                    disabled={currentIndex === panels.length - 1}
+                    className="p-4 bg-slate-900 border border-white/10 rounded-full text-white disabled:opacity-20 hover:bg-violet-600 transition-all z-20 shadow-2xl"
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                </div>
+                
+                {/* Carousel Indicators */}
+                <div className="flex justify-center gap-2 mt-8">
+                  {panels.map((_, i) => (
+                    <button 
+                      key={i}
+                      onClick={() => setCurrentIndex(i)}
+                      className={`h-1.5 rounded-full transition-all ${i === currentIndex ? 'w-8 bg-violet-500' : 'w-2 bg-white/10 hover:bg-white/20'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* GLOBAL EXPORT BUTTONS (When panels exist) */}
+            <div className="fixed bottom-8 right-8 flex items-center gap-3 z-50">
+              <button 
+                onClick={() => {
+                  const text = JSON.stringify(panels, null, 2);
+                  navigator.clipboard.writeText(text);
+                  alert("¡JSON copiado con éxito!");
+                }}
+                className="bg-slate-900/90 backdrop-blur-xl border border-white/10 text-slate-400 p-4 rounded-2xl hover:text-white transition-all shadow-2xl"
+                title="Copiar JSON"
+              >
+                <Copy size={20} />
+              </button>
+              <button 
+                onClick={exportToPDF}
+                className="flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-4 rounded-2xl font-black text-xs tracking-widest shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all uppercase"
+              >
+                <FileDown size={20} /> Exportar PDF
+              </button>
+            </div>
+
+          </div>
+        )}
+      </div>
+
+      {/* INPUT MODAL DIALOG */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-10">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isProcessing && setIsModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md" 
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              className="relative w-full max-w-4xl bg-slate-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-8 border-b border-white/5 bg-white/5">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-violet-600 rounded-2xl shadow-lg shadow-violet-900/40">
+                    <BrainCircuit size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-white tracking-tight uppercase italic">Nuevo Storyboard</h2>
+                    <p className="text-slate-500 text-[10px] font-bold tracking-widest uppercase">Procesador de Inteligencia Artificial</p>
+                  </div>
+                </div>
+                {!isProcessing && (
+                  <button 
+                    onClick={() => setIsModalOpen(false)}
+                    className="p-3 bg-slate-800 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-2xl transition-all"
+                  >
+                    <X size={20} />
+                  </button>
                 )}
               </div>
-            ) : (
-                <><BrainCircuit size={20}/> PROCESAR GUION</>
-              )}
-            </button>
-          </div>
-        </div>
 
-        {/* GENERATED PANELS LIST - REDESIGNED */}
-        {panels.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-20">
-            {panels.map((p: QwenPanel, index: number) => (
-              <div key={index} className="flex flex-col bg-slate-900/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-xl hover:border-violet-500/40 transition-all duration-300 group">
-                
-                {/* Image Area (Top) */}
-                <div className="aspect-video bg-black/60 relative group-hover:bg-black/40 transition-colors">
-                  <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-                    {(projectImages[p.scene] && !imageErrors[p.scene]) ? (
-                      <img 
-                        src={projectImages[p.scene]} 
-                        alt={`Preview ${p.scene}`} 
-                        onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                      />
-                    ) : (
-                      <>
-                        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
-                        <div className="flex flex-col items-center gap-2 opacity-20 group-hover:opacity-40 transition-opacity">
-                          <ImagePlus size={32} className="text-white" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Sin Arte</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
+              {/* Modal Body */}
+              <div className="p-8 flex flex-col gap-6">
+                <div className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 to-emerald-600 rounded-3xl blur opacity-10 group-focus-within:opacity-30 transition duration-1000"></div>
+                  <textarea 
+                    autoFocus
+                    className="relative w-full h-80 bg-black/40 border border-white/10 rounded-2xl p-8 text-slate-200 text-lg focus:ring-2 focus:ring-violet-500/50 outline-none backdrop-blur-xl resize-none custom-scrollbar"
+                    placeholder="Escribe o pega tu guion aquí... Qwen se encargará del resto."
+                    value={script}
+                    onChange={(e) => setScript(e.target.value)}
+                    disabled={isProcessing}
+                  />
                   
-                  {/* Scene Tag (Existing) */}
-                  <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-                    <span className="bg-violet-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg shadow-violet-900/40">
-                      SCENE {p.scene || 1}
-                    </span>
-                    <span className="bg-slate-800/80 backdrop-blur-md text-white/70 text-[10px] font-bold px-3 py-1 rounded-full border border-white/5">
-                      SHOT {index + 1}
-                    </span>
-                  </div>
-
-                  {/* Manual Upload & Copy Icons (Top Right) */}
-                  <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-                    <button 
-                      onClick={() => uploadImageForPanel(p.scene)}
-                      className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xl transition-all opacity-0 group-hover:opacity-100 border border-emerald-400/20"
-                      title="Subir imagen manualmente"
-                    >
-                      <ImagePlus size={16} />
-                    </button>
-                    {projectImages[p.scene] && (
-                      <button 
-                        onClick={() => removeImageForPanel(p.scene)}
-                        className="p-2 bg-rose-600/90 hover:bg-rose-500 text-white rounded-xl shadow-xl transition-all opacity-0 group-hover:opacity-100 border border-rose-400/20"
-                        title="Quitar imagen"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => {
-                        // Ahora solo copiamos 'description' porque ya tiene todo consolidado
-                        navigator.clipboard.writeText(p.description);
-                      }}
-                      className="p-2 bg-slate-800/80 backdrop-blur-md text-emerald-400 hover:text-white rounded-xl border border-emerald-500/20 hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
-                      title="Copiar prompt completo (Acción)"
-                    >
-                      <Copy size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Content Area */}
-                <div className="p-6 flex flex-col gap-5">
-                  {/* Acción */}
-                  <div className="space-y-1 group/field relative">
-                    <span className="text-[10px] font-black text-violet-400/70 uppercase tracking-[0.2em]">Acción</span>
-                    <p className="text-slate-200 text-sm leading-relaxed font-medium">
-                      {p.description || "Describiendo escena..."}
-                    </p>
-                  </div>
-
-                  {/* Bloques Técnicos Verticales */}
-                  <div className="space-y-4 pt-4 border-t border-white/5">
-                    <div className="space-y-1 group/field relative">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Cámara</span>
-                      <p className="text-violet-300 text-[11px] font-mono leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
-                        {p.optics || "N/A"}
-                      </p>
+                  {isProcessing && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center p-12 text-center">
+                      <div className="w-16 h-16 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin mb-6" />
+                      <h4 className="text-xl font-bold text-white mb-2 tracking-tight">Procesando Guion...</h4>
+                      <p className="text-slate-400 text-sm mb-8">Qwen está analizando la cinematografía y secuenciando los paneles.</p>
+                      
+                      {progress.total > 0 && (
+                        <div className="w-full max-w-xs space-y-2">
+                          <div className="flex justify-between text-[10px] font-black text-violet-400 uppercase tracking-widest">
+                            <span>Panel {progress.current} de {progress.total}</span>
+                            <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <motion.div 
+                              className="h-full bg-gradient-to-r from-violet-500 to-emerald-500"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(progress.current / progress.total) * 100}%` }}
+                              transition={{ duration: 0.5 }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="space-y-1 group/field relative">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Efecto</span>
-                      <p className="text-emerald-400 text-[11px] font-mono leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
-                        {p.physics || "N/A"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Footer Stats */}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5 opacity-60">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                      <CheckCircle size={12} className="text-emerald-500" />
-                      <span>Listo para exportar</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-amber-500">{p.timing || "3s"}</span>
-                  </div>
+                  )}
                 </div>
               </div>
-            ))}
-            
-            {/* Add New Slot if empty space */}
-            <div className="flex flex-col items-center justify-center p-8 bg-slate-900/20 border-2 border-dashed border-white/5 rounded-[2.5rem] opacity-40 hover:opacity-100 transition-opacity cursor-pointer group hover:bg-violet-500/5">
-              <Plus size={32} className="text-slate-600 group-hover:text-violet-500 transition-colors mb-4" />
-              <span className="text-xs font-black text-slate-500 uppercase tracking-widest group-hover:text-violet-400 transition-colors">Añadir Panel Manual</span>
+
+              {/* Modal Footer */}
+              <div className="p-8 bg-black/40 border-t border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setScript("")}
+                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={handleAddToWorkspace}
+                    disabled={panels.length === 0 || isProcessing}
+                    className="px-6 py-4 bg-white text-black hover:bg-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-30 flex items-center gap-2"
+                  >
+                    <Plus size={16} /> Añadir al Workspace
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      await processWithQwen();
+                      if (panels.length > 0) setIsModalOpen(false);
+                    }}
+                    disabled={!script.trim() || isProcessing}
+                    className="px-8 py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-violet-900/40 transition-all disabled:opacity-50 flex items-center gap-3"
+                  >
+                    <BrainCircuit size={18} /> Procesar Guion
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+    </div>
+  );
+};
+
+// COMPONENT HELPERS
+const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError, isVertical, isCarousel }: any) => {
+  return (
+    <div className={`flex flex-col bg-slate-900/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl hover:border-violet-500/40 transition-all duration-300 group ${isVertical ? 'flex-row min-h-[300px]' : ''} ${isCarousel ? 'w-full shadow-[0_0_100px_rgba(139,92,246,0.15)]' : ''}`}>
+      
+      {/* Image Area */}
+      <div className={`relative bg-black group-hover:bg-slate-950 transition-colors ${isVertical ? 'w-1/3' : 'aspect-video'} ${isCarousel ? 'h-[350px]' : ''}`}>
+        <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+          {(image && !hasError) ? (
+            <img 
+              src={image} 
+              alt={`Shot ${index + 1}`} 
+              onError={onError}
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            />
+          ) : (
+            <>
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+              <div className="flex flex-col items-center gap-3 opacity-20 group-hover:opacity-40 transition-opacity">
+                <ImagePlus size={48} className="text-white" />
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Sin Arte</span>
+              </div>
+            </>
+          )}
+        </div>
+        
+        {/* Info Tags */}
+        <div className="absolute top-6 left-6 flex flex-col gap-2 z-10">
+          <motion.span 
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="bg-violet-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-2xl uppercase tracking-widest"
+          >
+            Escena {panel.scene}
+          </motion.span>
+          <span className="bg-black/60 backdrop-blur-md text-white/50 text-[9px] font-black px-4 py-1.5 rounded-full border border-white/5 uppercase tracking-widest">
+            Shot {index + 1}
+          </span>
+        </div>
+
+        {/* Floating Actions */}
+        <div className="absolute top-6 right-6 flex items-center gap-2 z-10 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
+          <button 
+            onClick={() => onUpload(panel.scene)}
+            className="p-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-2xl shadow-2xl transition-all"
+            title="Actualizar imagen"
+          >
+            <ImagePlus size={18} />
+          </button>
+          {image && (
+            <button 
+              onClick={() => onRemove(panel.scene)}
+              className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl shadow-2xl transition-all"
+              title="Borrar imagen"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+        </div>
+
+        {/* Fullscreen Button Placeholder */}
+        <div className="absolute bottom-6 left-6 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+           <button className="p-2.5 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white/60 hover:text-white rounded-xl border border-white/10">
+              <Maximize2 size={16} />
+           </button>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className={`p-8 flex flex-col gap-6 ${isVertical ? 'w-2/3 justify-center' : ''}`}>
+        <div className="space-y-2 group/field">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black text-violet-400/70 uppercase tracking-[0.2em]">Acción / Prompt</span>
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(panel.description);
+                alert("Prompt copiado");
+              }}
+              className="p-1.5 text-slate-600 hover:text-violet-400 transition-colors"
+            >
+              <Copy size={12} />
+            </button>
+          </div>
+          <p className="text-slate-200 text-sm leading-relaxed font-bold italic font-serif">
+            "{panel.description}"
+          </p>
+        </div>
+
+        <div className={`grid gap-4 ${isVertical ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Óptica</span>
+            <span className="text-violet-300 font-mono text-[10px]">{panel.optics || "N/A"}</span>
+          </div>
+          <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Física</span>
+            <span className="text-emerald-400 font-mono text-[10px] truncate block">{panel.physics || "Standard"}</span>
+          </div>
+          {isVertical && (
+            <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Tiempo</span>
+              <span className="text-amber-500 font-mono text-[10px]">{panel.timing || "3s"}</span>
             </div>
+          )}
+        </div>
+
+        {!isVertical && (
+          <div className="flex items-center justify-between pt-4 border-t border-white/5">
+             <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                <CheckCircle size={14} className="text-emerald-500" />
+                Validado por Qwen
+             </div>
+             <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">{panel.timing || "3s"}</span>
           </div>
         )}
       </div>
     </div>
   );
 };
+
+const AddNewSlot = ({ onClick, isVertical }: any) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-center justify-center p-12 bg-slate-900/20 border-2 border-dashed border-white/5 rounded-[3rem] opacity-30 hover:opacity-100 hover:bg-violet-600/5 hover:border-violet-500/20 transition-all group ${isVertical ? 'w-full min-h-[300px]' : ''}`}
+  >
+    <div className="p-6 bg-slate-800/40 rounded-full mb-6 group-hover:scale-110 group-hover:bg-violet-600 transition-all duration-500 shadow-2xl">
+      <Plus size={40} className="text-slate-600 group-hover:text-white transition-colors" />
+    </div>
+    <span className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] group-hover:text-violet-400 transition-colors">Generar Nuevo Panel</span>
+  </button>
+);

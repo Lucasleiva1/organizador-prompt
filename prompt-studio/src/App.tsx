@@ -344,6 +344,26 @@ export default function App() {
     }
   };
 
+  const addGeneratedScenes = (panels: any[]) => {
+    const newScenes: Scene[] = [
+      ...scenes,
+      ...panels.map((p, index) => ({
+        id: crypto.randomUUID(),
+        sceneNumber: p.scene || (scenes.length + index + 1),
+        imageText: p.description || "",
+        videoText: "",
+        mode: "image" as const,
+        asset: null,
+        optics: p.optics || "N/A",
+        physics: p.physics || "N/A",
+        timing: p.timing || "3s",
+        groupId: workspaces.length > 0 ? workspaces[0].id : undefined
+      }))
+    ];
+    saveScenes(newScenes);
+    alert(`${panels.length} paneles añadidos al Workspace.`);
+  };
+
   if (loadingScenes || loadingWorkspaces || loadingScripts || !workspacesInitialized) {
     return (
       <div className={`theme-${theme} min-h-screen bg-[#020617] flex items-center justify-center`}>
@@ -420,7 +440,7 @@ export default function App() {
         deleteCharacter={deleteCharacter} 
       />
 
-      <QwenEngine />
+      <QwenEngine onAddGeneratedScenes={addGeneratedScenes} />
 
 
 

@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo, useCallback } from "react";
-import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, ChevronLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
@@ -40,16 +40,31 @@ export const WorkspaceInstance = ({
   const [videoMarkdown, setVideoMarkdown] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   // Filter global scenes to just this workspace
   const localScenes = useMemo(() => scenes.filter(s => (s.groupId || 'default') === workspace.id), [scenes, workspace.id]);
   
   const filteredLocalScenes = useMemo(() => {
-    return !search.trim() ? localScenes : localScenes.filter(s => 
-      s.imageText.toLowerCase().includes(search.toLowerCase()) || 
-      s.videoText.toLowerCase().includes(search.toLowerCase())
+    if (!search.trim()) return localScenes;
+    const q = search.toLowerCase();
+    return localScenes.filter(s => 
+      s.imageText.toLowerCase().includes(q) || 
+      s.videoText.toLowerCase().includes(q) ||
+      (s.translatedImageText || '').toLowerCase().includes(q) ||
+      (s.translatedVideoText || '').toLowerCase().includes(q)
     );
   }, [localScenes, search]);
+
+  // Clamp carousel index if scenes change
+  useEffect(() => {
+    if (carouselIndex >= filteredLocalScenes.length && filteredLocalScenes.length > 0) {
+      setCarouselIndex(filteredLocalScenes.length - 1);
+    } else if (filteredLocalScenes.length === 0 && carouselIndex !== 0) {
+      setCarouselIndex(0);
+    }
+  }, [filteredLocalScenes.length, carouselIndex]);
 
   const addPromptsToScenes = (rawText: string, mode: 'image' | 'video') => {
     if (!rawText.trim()) return;
@@ -279,7 +294,35 @@ export const WorkspaceInstance = ({
             className="bg-transparent border-none outline-none text-slate-300 font-black text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
           />
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className="flex items-center gap-3">
+          {/* View Mode Switcher */}
+          <div className="flex items-center bg-slate-950/40 p-1 rounded-2xl border border-white/5 mr-2">
+            <button 
+              onClick={() => setViewMode('grid')}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              title="Vista Rejilla"
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button 
+              onClick={() => setViewMode('vertical')}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'vertical' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              title="Vista Vertical"
+            >
+              <LayoutList size={18} />
+            </button>
+            <button 
+              onClick={() => {
+                setViewMode('carousel');
+                setCarouselIndex(0);
+              }}
+              className={`p-2.5 rounded-xl transition-all ${viewMode === 'carousel' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              title="Vista Enfoque (Carrusel)"
+            >
+              <View size={18} />
+            </button>
+          </div>
           <button
             onClick={() => setIsCollapsed(true)}
             className="p-3 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-2xl transition-all flex items-center gap-2 group"
@@ -418,27 +461,91 @@ export const WorkspaceInstance = ({
       <main className="lg:col-span-3">
         <AnimatePresence mode="popLayout">
           {filteredLocalScenes.length === 0 ? (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center h-[500px] rounded-[3rem] border-2 border-dashed border-white/5 bg-slate-900/20 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -20 }}
+              className="flex flex-col items-center justify-center h-[500px] rounded-[3rem] border-2 border-dashed border-white/5 bg-slate-900/20 backdrop-blur-sm"
+            >
               <div className="w-20 h-20 rounded-2xl bg-slate-800/40 flex items-center justify-center mb-6 shadow-2xl">
                 <Plus className="text-slate-600 animate-pulse" size={36} />
               </div>
               <h3 className="text-xl font-black text-slate-300 mb-2 tracking-tight">Comienza la magia</h3>
-              <p className="text-slate-500 text-sm font-medium mb-6">Pega texto en el panel lateral o arrastra imágenes</p>
+              <p className="text-slate-500 text-sm font-medium mb-6">Pega texto o arrastra imágenes</p>
               <div className="flex gap-3">
                 <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all">
-                  <FolderPlus size={14} className="inline mr-2" /> Importar Archivo
+                  <FolderPlus size={14} className="inline mr-2" /> Importar
                 </button>
                 <button onClick={() => imageInputRef.current?.click()} className="px-5 py-2.5 bg-violet-500/10 border border-violet-500/20 rounded-xl text-violet-400 text-xs font-bold hover:bg-violet-500/20 transition-all">
-                  <Upload size={14} className="inline mr-2" /> Subir Imagen
+                  <Upload size={14} className="inline mr-2" /> Subir
                 </button>
               </div>
             </motion.div>
+          ) : viewMode === 'carousel' ? (
+            <div className="relative group">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={filteredLocalScenes[carouselIndex]?.id}
+                  initial={{ opacity: 0, scale: 0.95, x: 20 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, x: -20 }}
+                  className="w-full"
+                >
+                  {filteredLocalScenes[carouselIndex] ? (
+                    <SceneCard 
+                      scene={filteredLocalScenes[carouselIndex]} 
+                      index={carouselIndex} 
+                      updateScene={updateScene} 
+                      deleteScene={deleteScene} 
+                      duplicateScene={duplicateScene}
+                      onTranslate={handleTranslate}
+                      isCarousel={true}
+                    />
+                  ) : (
+                    <div className="h-[400px] flex items-center justify-center text-slate-500 font-bold uppercase tracking-widest bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-white/5">
+                      Cargando escena...
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Carousel Controls */}
+              <div className="absolute top-1/2 -left-6 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => setCarouselIndex(prev => Math.max(0, prev - 1))}
+                  disabled={carouselIndex === 0}
+                  className="p-4 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-full text-white shadow-2xl hover:bg-violet-600 transition-all disabled:opacity-20"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+              </div>
+              <div className="absolute top-1/2 -right-6 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                  onClick={() => setCarouselIndex(prev => Math.min(filteredLocalScenes.length - 1, prev + 1))}
+                  disabled={carouselIndex === filteredLocalScenes.length - 1}
+                  className="p-4 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-full text-white shadow-2xl hover:bg-violet-600 transition-all disabled:opacity-20"
+                >
+                  <ChevronRight size={24} />
+                </button>
+              </div>
+
+              {/* Progress Indicators */}
+              <div className="flex justify-center gap-2 mt-8">
+                {filteredLocalScenes.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCarouselIndex(i)}
+                    className={`h-1.5 rounded-full transition-all duration-500 ${i === carouselIndex ? 'w-8 bg-violet-500' : 'w-2 bg-slate-800'}`}
+                  />
+                ))}
+              </div>
+            </div>
           ) : (
             <WorkspaceSection 
               items={filteredLocalScenes}
+              viewMode={viewMode}
               onReorder={(newOrder: Scene[]) => {
                 if (!search.trim()) {
-                  // Reorder within global array
                   const updatedScenes = [...scenes];
                   const localIndices = scenes.map((s, i) => (s.groupId || 'default') === workspace.id ? i : -1).filter(i => i !== -1);
                   newOrder.forEach((scene, idx) => {
@@ -446,7 +553,6 @@ export const WorkspaceInstance = ({
                   });
                   saveScenes(updatedScenes);
                 } else {
-                  // Search active -- avoid destructive reorder or do partial
                   const newFullList = [...scenes];
                   const filteredIds = filteredLocalScenes.map(s => s.id);
                   let filteredCount = 0;
@@ -467,6 +573,7 @@ export const WorkspaceInstance = ({
                     deleteScene={deleteScene} 
                     duplicateScene={duplicateScene}
                     onTranslate={handleTranslate} 
+                    isVertical={viewMode === 'vertical'}
                   />
                 );
               }}
