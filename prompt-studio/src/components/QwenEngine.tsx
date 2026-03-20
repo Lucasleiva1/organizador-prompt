@@ -24,10 +24,40 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const splitScriptIntoPanels = (text: string): string[] => {
-    // Dividimos por marcadores de panel, priorizando PANEL sobre ESCENA.
-    // ESCENA se captura solo si viene seguida de contenido técnico inmediato.
-    const segments = text.split(/(?=### PANEL|PANEL #|PANEL \d+)/gi);
+    const lines = text.trim().split(/\r?\n/);
+    // Detectamos si es CSV por la cabecera
+    const isCSV = lines[0]?.toLowerCase().includes("shot") && lines[0]?.includes(",");
+    
+    if (isCSV) {
+      // Retornamos las líneas de datos (saltando la cabecera)
+      return lines.slice(1).filter(l => l.trim().length > 5);
+    }
+    
+    // Dividimos por marcadores de panel, incluyendo el nuevo formato "Panel X.X" y variaciones de markdown
+    const segments = text.split(/(?=### PANEL|## PANEL|PANEL #|PANEL \d+|- \*\*Panel \d+\.\d+|Panel \d+\.\d+)/gi);
     
     return segments
       .map(s => s.trim())
@@ -45,28 +75,49 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
       // 1. Buscamos la etiqueta ignorando asteriscos previos.
       // 2. Capturamos TODO después del primer separador (:) o después del nombre si no hay separador.
       // 3. Capturamos hasta el FINAL de la línea (incluyendo asteriscos de formato intermedio).
-      const reg = new RegExp(`(?:^|[\\s*#])${label}[\\s*:]+([^\\n#]+)`, 'i');
+      const reg = new RegExp(`(?:^|[\\s*#_]+)${label}[\\s*:]+([^\\n#]+)`, 'i');
       const m = text.match(reg);
       if (m && m[1]) {
-        const val = m[1].replace(/\*\*/g, '').trim();
+        const val = m[1].replace(/\*\*/g, '').replace(/[\*_\\]/g, '').trim();
         // Si el valor es solo un símbolo (como ":" o "::"), lo ignoramos para que use la descripción o N/A
-        if (/^[:\s\*]*$/.test(val) || (val.length < 3 && /^[^a-zA-Z0-9]+$/.test(val))) return null;
+        if (/^[:\s\*]*$/.test(val) || (val.length < 2 && /^[^a-zA-Z0-9]+$/.test(val))) return null;
         return val;
       }
       return null;
     };
 
 
-    const comp = getVal("Composición") || getVal("Encuadre") || getVal("Plano");
-    const action = getVal("Acción") || getVal("Movimiento");
-    const camera = getVal("Cámara") || getVal("Lente") || getVal("Lentes") || getVal("Óptica");
-    const physics = getVal("Iluminación") || getVal("Atmósfera") || getVal("Efecto") || getVal("Efectos") || getVal("Luz");
+    const comp = getVal("Composición") || getVal("Encuadre") || getVal("Plano") || (text.match(/\[(.*?)\]/)?.[1] || "");
+    const action = getVal("Acción") || getVal("Escena") || getVal("Movimiento") || "";
+    const camera = getVal("Cámara") || getVal("Lente") || getVal("Movimiento") || getVal("Slide") || getVal("Vibración");
+    const physics = getVal("Iluminación") || getVal("Atmósfera") || getVal("Efecto") || getVal("Física") || getVal("VFX") || getVal("Laboratorio") || getVal("Color") || getVal("Luz") || getVal("Audio") || getVal("Sonido");
 
     if (comp || action || camera || physics) {
-      // Si la descripción está vacía, intentamos usar la Composición o incluso el Efecto
-      let finalDesc = `${comp || ""} ${action || ""}`.trim();
+      // Si el formato es de bullet point o CSV, limpiamos la acción
+      let finalDesc = action || "";
+      
+      // Lógica específica para CSV (si el texto tiene comas y comillas pero no etiquetas)
+      const csvCols = text.includes(",") && text.includes('"') ? parseCSVLine(text) : [];
+      if (csvCols.length >= 4) {
+        return {
+          scene: fallbackScene,
+          description: csvCols[3] || csvCols[1] || "Sin descripción",
+          optics: csvCols[2] || "N/A",
+          physics: csvCols[4] || "N/A",
+          timing: "3s"
+        };
+      }
+
+      if (!finalDesc) {
+        // Intentamos extraer lo que hay después del marcador de panel
+        const afterMarker = text.split(/:\*\*|\]:/)[1];
+        if (afterMarker) {
+          finalDesc = afterMarker.split(/\. (?:Movimiento|Efecto|VFX|Color|Luz|Cámara|Lente):/i)[0].trim();
+        }
+      }
+
+      if (!finalDesc && comp) finalDesc = comp;
       if (!finalDesc && physics) finalDesc = physics;
-      if (!finalDesc && camera) finalDesc = camera;
 
       return {
         scene: fallbackScene, // Forzamos el orden secuencial para evitar saltos
