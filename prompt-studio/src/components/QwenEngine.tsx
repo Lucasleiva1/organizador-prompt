@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus, Trash2, Copy } from 'lucide-react';
+import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus, Trash2, Copy, FolderOpen } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir, readDir } from '@tauri-apps/plugin-fs';
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { Scene } from '../types';
 
 interface QwenPanel {
@@ -269,6 +270,18 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     }
   };
 
+  const openProjectFolder = async () => {
+    try {
+      const docPath = await documentDir();
+      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
+      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      await mkdir(projectDir, { recursive: true });
+      await revealItemInDir(projectDir);
+    } catch (e) {
+      console.warn("Error al abrir la carpeta:", e);
+    }
+  };
+
   const handleExportToWorkspace = () => {
     if (panels.length === 0) return;
     const newScenes: Scene[] = panels.map((p: QwenPanel): Scene => ({
@@ -409,6 +422,13 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               title="Refrescar imágenes de la carpeta"
             >
               <ImagePlus size={20} />
+            </button>
+            <button 
+              onClick={openProjectFolder}
+              className="p-3 bg-slate-800 hover:bg-violet-500/20 text-slate-300 hover:text-violet-400 rounded-xl transition-all border border-white/5 hover:border-violet-500/30"
+              title="Abrir carpeta de imágenes del proyecto"
+            >
+              <FolderOpen size={20} />
             </button>
           </div>
 
