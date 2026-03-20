@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { BrainCircuit, ImagePlus, CheckCircle, FileDown, Plus, Trash2, Copy } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
-import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
+import { writeFile, mkdir, readDir } from '@tauri-apps/plugin-fs';
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { Scene } from '../types';
 
 interface QwenPanel {
@@ -12,6 +13,7 @@ interface QwenPanel {
   optics: string;
   physics: string;
   timing: string;
+  imageUrl?: string;
 }
 
 interface QwenEngineProps {
@@ -23,6 +25,8 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [panels, setPanels] = useState<QwenPanel[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [projectName, setProjectName] = useState("Sin_Nombre");
+  const [projectImages, setProjectImages] = useState<Record<number, string>>({});
 
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
@@ -229,6 +233,39 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     } finally {
       setIsProcessing(false);
       setProgress({ current: 0, total: 0 });
+      // Escaneamos imágenes después de procesar
+      setTimeout(scanProjectImages, 500);
+    }
+  };
+
+  const scanProjectImages = async () => {
+    try {
+      const docPath = await documentDir();
+      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
+      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      
+      // Aseguramos que la carpeta existe
+      await mkdir(projectDir, { recursive: true });
+      
+      const entries = await readDir(projectDir);
+      const newImages: Record<number, string> = {};
+      
+      for (const entry of entries) {
+        if (!entry.isFile) continue;
+        const name = entry.name.toLowerCase();
+        if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) {
+          // Intentamos extraer el número del nombre (ej: "1.png" o "shot_1.png")
+          const numMatch = name.match(/(\d+)/);
+          if (numMatch) {
+            const num = parseInt(numMatch[1]);
+            const fullPath = await join(projectDir, entry.name);
+            newImages[num] = convertFileSrc(fullPath);
+          }
+        }
+      }
+      setProjectImages(newImages);
+    } catch (e) {
+      console.warn("Error escaneando imágenes:", e);
     }
   };
 
@@ -239,7 +276,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
         imageText: p.description || "",
         videoText: "",
         mode: "image",
-        asset: null,
+        asset: p.imageUrl || projectImages[p.scene] || null,
         theme: "normal",
         sceneNumber: p.scene || 1,
         optics: p.optics || "",
@@ -354,6 +391,27 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             <BrainCircuit className="text-violet-500" size={36} />
             Storyboard IA
           </h1>
+
+          <div className="flex items-center gap-4 bg-slate-900/50 p-2 rounded-2xl border border-white/5">
+            <div className="flex flex-col px-2">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Proyecto</span>
+              <input 
+                type="text" 
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                className="bg-transparent text-white font-bold text-sm outline-none border-b border-white/10 focus:border-violet-500 transition-colors w-32"
+                placeholder="Nombre del proyecto..."
+              />
+            </div>
+            <button 
+              onClick={scanProjectImages}
+              className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all border border-white/5"
+              title="Refrescar imágenes de la carpeta"
+            >
+              <ImagePlus size={20} />
+            </button>
+          </div>
+
           <div className="flex items-center gap-3">
             <button 
               onClick={() => {
@@ -443,9 +501,19 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                 
                 {/* Image Area (Top) */}
                 <div className="aspect-video bg-black/60 relative group-hover:bg-black/40 transition-colors">
-                  <div className="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40 transition-opacity">
-                    <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
-                    <ImagePlus size={32} className="text-white" />
+                  <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                    {projectImages[p.scene] ? (
+                      <img 
+                        src={projectImages[p.scene]} 
+                        alt={`Preview ${p.scene}`} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      />
+                    ) : (
+                      <>
+                        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '15px 15px' }} />
+                        <ImagePlus size={32} className="text-white/20 group-hover:text-white/40 transition-colors" />
+                      </>
+                    )}
                   </div>
                   
                   {/* Scene Tag */}
