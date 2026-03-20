@@ -28,6 +28,13 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [projectName, setProjectName] = useState("Sin_Nombre");
   const [projectImages, setProjectImages] = useState<Record<number, string>>({});
+  const [lastScanCount, setLastScanCount] = useState<number | null>(null);
+
+  // Auto-escaneo cuando cambia el nombre o hay nuevos paneles
+  React.useEffect(() => {
+    const timer = setTimeout(scanProjectImages, 1500);
+    return () => clearTimeout(timer);
+  }, [projectName, panels.length]);
 
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
@@ -265,8 +272,13 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
         }
       }
       setProjectImages(newImages);
+      setLastScanCount(Object.keys(newImages).length);
+      
+      // Feedback opcional por consola
+      console.log(`[SCAN] ${Object.keys(newImages).length} imágenes encontradas para el proyecto ${projectName}`);
     } catch (e) {
       console.warn("Error escaneando imágenes:", e);
+      setLastScanCount(0);
     }
   };
 
@@ -418,14 +430,20 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             </div>
             <button 
               onClick={scanProjectImages}
-              className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all border border-white/5"
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-violet-900/40 relative overflow-hidden group/refresh"
               title="Refrescar imágenes de la carpeta"
             >
-              <ImagePlus size={20} />
+              <ImagePlus size={18} className="group-hover/refresh:scale-110 transition-transform" />
+              <span className="text-xs uppercase font-black tracking-widest">Refrescar Imágenes</span>
+              {lastScanCount !== null && (
+                <span className="absolute -top-1 -right-1 bg-emerald-500 text-[8px] px-1.5 py-0.5 rounded-full border border-slate-900">
+                  {lastScanCount}
+                </span>
+              )}
             </button>
             <button 
               onClick={openProjectFolder}
-              className="p-3 bg-slate-800 hover:bg-violet-500/20 text-slate-300 hover:text-violet-400 rounded-xl transition-all border border-white/5 hover:border-violet-500/30"
+              className="p-3 bg-slate-800 hover:bg-white/10 text-slate-300 rounded-xl transition-all border border-white/5"
               title="Abrir carpeta de imágenes del proyecto"
             >
               <FolderOpen size={20} />
