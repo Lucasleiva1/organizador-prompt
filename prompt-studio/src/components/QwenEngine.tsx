@@ -102,41 +102,37 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 
     const comp = getVal("Composición") || getVal("Encuadre") || getVal("Plano") || (text.match(/\[(.*?)\]/)?.[1] || "");
     const action = getVal("Acción") || getVal("Escena") || getVal("Movimiento") || "";
-    const camera = getVal("Cámara") || getVal("Lente") || getVal("Movimiento") || getVal("Slide") || getVal("Vibración");
-    const physics = getVal("Iluminación") || getVal("Atmósfera") || getVal("Efecto") || getVal("Física") || getVal("VFX") || getVal("Laboratorio") || getVal("Color") || getVal("Luz") || getVal("Audio") || getVal("Sonido");
+    const camera = getVal("Cámara") || getVal("Lente") || getVal("Movimiento") || getVal("Slide") || getVal("Vibración") || "N/A";
+    const physics = getVal("Iluminación") || getVal("Atmósfera") || getVal("Efecto") || getVal("Física") || getVal("VFX") || getVal("Laboratorio") || getVal("Color") || getVal("Luz") || getVal("Audio") || getVal("Sonido") || "N/A";
 
-    if (comp || action || camera || physics) {
-      // Si el formato es de bullet point o CSV, limpiamos la acción
-      let finalDesc = action || "";
+    if (comp || action || camera !== "N/A" || physics !== "N/A") {
+      // Consolidamos TODA la información en el campo finalDesc (Acción) para copia rápida
+      let finalDesc = "";
+      if (comp && comp !== "N/A") finalDesc += `[${comp.toUpperCase()}] `;
+      if (action) finalDesc += `${action}. `;
+      if (camera && camera !== "N/A") finalDesc += `CÁMARA: ${camera}. `;
+      if (physics && physics !== "N/A") finalDesc += `EFECTO/LUZ: ${physics}.`;
       
       // Lógica específica para CSV (si el texto tiene comas y comillas pero no etiquetas)
       const csvCols = text.includes(",") && text.includes('"') ? parseCSVLine(text) : [];
       if (csvCols.length >= 4) {
+        const csvComp = csvCols[2] || "N/A";
+        const csvAction = csvCols[3] || csvCols[1] || "Sin descripción";
+        const csvPhysics = csvCols[4] || "N/A";
         return {
           scene: fallbackScene,
-          description: csvCols[3] || csvCols[1] || "Sin descripción",
-          optics: csvCols[2] || "N/A",
-          physics: csvCols[4] || "N/A",
+          description: `[${csvComp}] ${csvAction}. EFECTO: ${csvPhysics}`,
+          optics: csvComp,
+          physics: csvPhysics,
           timing: "3s"
         };
       }
 
-      if (!finalDesc) {
-        // Intentamos extraer lo que hay después del marcador de panel
-        const afterMarker = text.split(/:\*\*|\]:/)[1];
-        if (afterMarker) {
-          finalDesc = afterMarker.split(/\. (?:Movimiento|Efecto|VFX|Color|Luz|Cámara|Lente):/i)[0].trim();
-        }
-      }
-
-      if (!finalDesc && comp) finalDesc = comp;
-      if (!finalDesc && physics) finalDesc = physics;
-
       return {
-        scene: fallbackScene, // Forzamos el orden secuencial para evitar saltos
-        description: finalDesc || "Panel técnico",
-        optics: camera || "N/A",
-        physics: physics || "N/A",
+        scene: fallbackScene,
+        description: finalDesc.trim() || action || "Panel técnico",
+        optics: camera,
+        physics: physics,
         timing: "3s"
       };
     }
@@ -173,7 +169,11 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 
       setProgress({ current: 0, total: finalChunks.length });
       
-      const systemPrompt = `Actúa como extractor JSON literal. REGLAS: 1. NO resumas. 2. Copia y pega Acción, Cámara e Iluminación. Salida: SOLO objeto JSON {}.`.trim();
+      const systemPrompt = `Actúa como un storyboarder experto. REGLAS: 
+      1. Genera un objeto JSON.
+      2. El campo 'description' (Acción) DEBE integrar toda la información técnica: [Encuadre] + Acción + Cámara + Iluminación. 
+      3. Mantén 'optics' (Cámara) y 'physics' (Efecto) como campos separados solo para referencia visual.
+      Salida: SOLO JSON {}`.trim();
 
       const allPanels: QwenPanel[] = [];
 
@@ -212,9 +212,14 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             const data = await response.json();
             const panel = JSON.parse(data.response);
             if (panel) {
+              // Consolidamos en el push de la IA también por si la IA no lo hizo perfecto
+              const consolidatedDesc = panel.description?.includes(panel.optics) 
+                ? panel.description 
+                : `[${panel.optics || 'N/A'}] ${panel.description}. CÁMARA: ${panel.optics || 'N/A'}. EFECTO: ${panel.physics || 'N/A'}`;
+
               allPanels.push({
-                scene: i + 1, // Siempre forzamos el orden del bucle para evitar saltos (1, 2, 3...)
-                description: panel.description || panel.physics || "Sin descripción",
+                scene: i + 1,
+                description: consolidatedDesc,
                 optics: panel.optics || "N/A",
                 physics: panel.physics || "N/A",
                 timing: panel.timing || "3s"
@@ -655,11 +660,11 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                     )}
                     <button 
                       onClick={() => {
-                        const text = `ACCIÓN: ${p.description}\nCÁMARA: ${p.optics}\nEFECTO: ${p.physics}`;
-                        navigator.clipboard.writeText(text);
+                        // Ahora solo copiamos 'description' porque ya tiene todo consolidado
+                        navigator.clipboard.writeText(p.description);
                       }}
-                      className="p-2 bg-slate-800/80 backdrop-blur-md text-slate-400 hover:text-white rounded-xl border border-white/5 hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
-                      title="Copiar todo el panel"
+                      className="p-2 bg-slate-800/80 backdrop-blur-md text-emerald-400 hover:text-white rounded-xl border border-emerald-500/20 hover:border-white/20 transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+                      title="Copiar prompt completo (Acción)"
                     >
                       <Copy size={16} />
                     </button>
