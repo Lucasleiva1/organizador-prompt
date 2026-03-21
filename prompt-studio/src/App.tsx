@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { AnimatePresence } from "framer-motion";
-import { Moon, Monitor, Sun, Plus, Sparkles, Trash2, Save, FolderOpen, Film } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Moon, Monitor, Sun, Plus, Sparkles, Trash2, Save, FolderOpen, Film, Settings, ChevronDown } from "lucide-react";
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { load } from "@tauri-apps/plugin-store";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -233,6 +234,31 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'inter' | 'light'>(() => (localStorage.getItem('ps-theme') as any) || 'inter');
   useEffect(() => { localStorage.setItem('ps-theme', theme); }, [theme]);
   
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const changeResolution = async (width: number, height: number) => {
+    try {
+      const win = getCurrentWindow();
+      // Solo ajustamos el tamaño y centramos
+      await win.setSize(new LogicalSize(width, height));
+      await win.center();
+      setIsSettingsOpen(false);
+    } catch (error: any) {
+      alert("Error Tauri: " + error);
+    }
+  };
+
   const [workspacesInitialized, setWorkspacesInitialized] = useState(false);
 
   useEffect(() => {
@@ -425,6 +451,47 @@ export default function App() {
             >
               <FolderOpen size={13} /> CARGAR
             </button>
+            
+            <div className="w-px h-6 bg-white/5 mx-1" />
+
+            {/* CONFIGURACION (RESOLUCIONES) */}
+            <div className="relative" ref={settingsRef}>
+              <button
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className={`flex items-center gap-2 px-4 py-2 rounded font-bold text-[10px] uppercase tracking-widest transition-all border ${isSettingsOpen ? 'bg-slate-700/50 border-slate-500/50 text-white' : 'bg-slate-800/40 border-slate-500/20 text-slate-400 hover:bg-slate-700/30 hover:border-slate-500/40 hover:text-slate-300'}`}
+                title="Configuraciones de Visualización"
+              >
+                <Settings size={13} /> CONFIG. <ChevronDown size={10} className={`transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              <AnimatePresence>
+                {isSettingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden z-[100] flex flex-col"
+                  >
+                    <div className="p-3 border-b border-[#333] bg-[#111]">
+                      <h3 className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Resolución de Ventana</h3>
+                    </div>
+                    <div className="p-2 flex flex-col gap-1">
+                      <button onClick={() => changeResolution(1920, 1080)} className="text-left px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex justify-between items-center group">
+                        1920 x 1080 <span className="text-[9px] text-slate-600 group-hover:text-amber-500 uppercase tracking-widest">Full HD</span>
+                      </button>
+                      <button onClick={() => changeResolution(1280, 720)} className="text-left px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex justify-between items-center group">
+                        1280 x 720 <span className="text-[9px] text-slate-600 group-hover:text-amber-500 uppercase tracking-widest">HD</span>
+                      </button>
+                      <button onClick={() => changeResolution(1024, 768)} className="text-left px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex justify-between items-center group">
+                        1024 x 768 <span className="text-[9px] text-slate-600 group-hover:text-emerald-400 uppercase tracking-widest">Modo Chico</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {/* FIN CONFIGURACION */}
           </div>
         </div>
         

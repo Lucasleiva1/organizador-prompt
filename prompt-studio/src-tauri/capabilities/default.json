@@ -17,6 +17,9 @@
     "fs:allow-document-read-recursive",
     "fs:allow-document-write-recursive",
     "dialog:default",
-    "core:path:default"
+    "core:path:default",
+    "core:window:default",
+    "core:window:allow-set-size",
+    "core:window:allow-center"
   ]
 }

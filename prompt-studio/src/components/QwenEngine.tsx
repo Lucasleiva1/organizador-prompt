@@ -65,6 +65,23 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     }
   }, [panels, viewMode]);
 
+  const handleAddPanelAfter = (index: number) => {
+    const newPanel: QwenPanel = {
+      scene: (panels.length > 0 ? Math.max(...panels.map(p => p.scene)) : 0) + 1,
+      description: "Nueva escena de storyboard.",
+      optics: "N/A",
+      physics: "N/A",
+      timing: "N/A"
+    };
+    const newPanels = [...panels];
+    newPanels.splice(index + 1, 0, newPanel);
+    setPanels(newPanels);
+  };
+
+  const handleRemovePanel = (index: number) => {
+    const newPanels = panels.filter((_, i) => i !== index);
+    setPanels(newPanels);
+  };
 
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
@@ -634,6 +651,8 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                     onUpload={uploadImageForPanel}
                     onRemove={removeImageForPanel}
                     onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
+                    onAddPanel={() => handleAddPanelAfter(index)}
+                    onRemovePanel={() => handleRemovePanel(index)}
                   />
                 ))}
                 <AddNewSlot onClick={() => setIsModalOpen(true)} />
@@ -653,6 +672,8 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                     onRemove={removeImageForPanel}
                     onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
                     isVertical
+                    onAddPanel={() => handleAddPanelAfter(index)}
+                    onRemovePanel={() => handleRemovePanel(index)}
                   />
                 ))}
                 <AddNewSlot onClick={() => setIsModalOpen(true)} isVertical />
@@ -681,6 +702,8 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                         onUpload={uploadImageForPanel}
                         onRemove={removeImageForPanel}
                         onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
+                        onAddPanel={() => handleAddPanelAfter(index)}
+                        onRemovePanel={() => handleRemovePanel(index)}
                       />
                     </div>
                   ))}
@@ -811,7 +834,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 };
 
 // COMPONENT HELPERS
-const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError, isVertical, isCarousel }: any) => {
+const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError, isVertical, isCarousel, onAddPanel, onRemovePanel }: any) => {
   return (
     <div className={`flex flex-col bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden shadow-xl hover:border-violet-500/30 transition-all duration-300 group ${isVertical ? 'flex-row min-h-[300px]' : 'h-full w-full'}`}>
       
@@ -883,15 +906,32 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
         <div className="flex flex-col gap-2 flex-grow group/field">
           <div className="flex justify-between items-center flex-shrink-0">
             <span className="text-[10px] font-bold text-violet-400/80 uppercase tracking-[0.2em]">Acción / Prompt</span>
-            <button 
-              onClick={() => {
-                navigator.clipboard.writeText(panel.description);
-                alert("Prompt copiado");
-              }}
-              className="p-1.5 text-slate-600 hover:text-violet-400 transition-colors"
-            >
-              <Copy size={12} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={onAddPanel}
+                className="p-1.5 text-slate-600 hover:text-emerald-400 transition-colors"
+                title="Añadir Escena Abajo"
+              >
+                <Plus size={12} />
+              </button>
+              <button 
+                onDoubleClick={onRemovePanel}
+                className="p-1.5 text-slate-600 hover:text-red-400 transition-colors"
+                title="Doble clic para eliminar esta Escena"
+              >
+                <Trash2 size={12} />
+              </button>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(panel.description);
+                  alert("Prompt copiado");
+                }}
+                className="p-1.5 text-slate-600 hover:text-violet-400 transition-colors"
+                title="Copiar Prompt"
+              >
+                <Copy size={12} />
+              </button>
+            </div>
           </div>
           <div className="pb-2">
             <p className="text-slate-300 text-sm leading-relaxed font-medium italic font-serif">
@@ -908,7 +948,7 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
             </div>
           </div>
           <div className="bg-[#111] px-4 py-3 rounded-xl border border-[#333] flex flex-col">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Física</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Efecto</span>
             <div>
               <span className="text-emerald-400 font-mono text-[10px] leading-relaxed">{panel.physics || "Standard"}</span>
             </div>
