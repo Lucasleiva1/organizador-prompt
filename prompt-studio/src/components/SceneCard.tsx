@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Copy, 
@@ -130,10 +130,14 @@ export const SceneCard = ({
     }
   }, [isEditingVideo]);
 
-  const assetUrl = useMemo(() => {
-    if (!scene.asset) return undefined;
-    if (scene.asset.startsWith('http') || scene.asset.startsWith('data:')) return scene.asset;
-    return `asset://${scene.asset}`;
+  const [assetUrl, setAssetUrl] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (scene.asset) {
+      AssetManager.resolveAssetUrl(scene.asset).then(setAssetUrl);
+    } else {
+      setAssetUrl(undefined);
+    }
   }, [scene.asset]);
 
   const parsedFront = parseScriptText(showTranslateImage ? (scene.translatedImageText || "Traduciendo...") : scene.imageText);
