@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, FileDown } from "lucide-react";
-import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
 import { WorkspaceSection } from "./WorkspaceSection";
@@ -10,7 +10,7 @@ import { ProductionAgent } from "../utils/ProductionAgent";
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
 interface WorkspaceInstanceProps {
   index: number;
   workspace: Workspace;
@@ -369,7 +369,7 @@ export const WorkspaceInstance = ({
       await mkdir(targetFolder, { recursive: true });
 
       const defaultPath = await join(targetFolder, `${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-      const fullPath = await saveDialog({
+      const fullPath = await save({
         title: "Exportar Sección a PDF",
         defaultPath: defaultPath,
         filters: [{ name: "PDF", extensions: ["pdf"] }]
@@ -636,21 +636,7 @@ export const WorkspaceInstance = ({
                   dragElastic={0.05}
                   className="w-max"
                 >
-                  <Reorder.Group 
-                    axis="x" 
-                    values={filteredLocalScenes} 
-                    onReorder={(newOrder: Scene[]) => {
-                      if (!search.trim()) {
-                        const updatedScenes = [...scenes];
-                        const localIndices = scenes.map((s, i) => (s.groupId || 'default') === workspace.id ? i : -1).filter(i => i !== -1);
-                        newOrder.forEach((scene: Scene, idx: number) => {
-                          updatedScenes[localIndices[idx]] = scene;
-                        });
-                        saveScenes(updatedScenes);
-                      }
-                    }}
-                    className="flex flex-row gap-6 px-[100px]"
-                  >
+                  <div className="flex flex-row gap-6 px-[100px]">
                     {filteredLocalScenes.map((scene, i) => (
                       <SceneCard 
                         key={scene.id}
@@ -663,7 +649,7 @@ export const WorkspaceInstance = ({
                         isCarousel={true}
                       />
                     ))}
-                  </Reorder.Group>
+                  </div>
                 </motion.div>
               </div>
           ) : (

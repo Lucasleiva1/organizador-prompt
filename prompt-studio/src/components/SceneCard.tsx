@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
-import { Reorder, motion, useDragControls } from "framer-motion";
+import { motion } from "framer-motion";
 import { 
   Copy, 
   Trash2, 
@@ -12,8 +12,7 @@ import {
   Music,
   Zap,
   CheckCircle2,
-  Trash,
-  GripVertical
+  Trash
 } from "lucide-react";
 import { Scene } from "../types";
 import { AssetManager } from "../utils/AssetManager";
@@ -115,7 +114,7 @@ export const SceneCard = ({
   const [isEditingVideo, setIsEditingVideo] = useState(false);
   const [isFrontExpanded, setIsFrontExpanded] = useState(false);
   
-  const dragControls = useDragControls();
+
   const fileInputRefFront = useRef<HTMLInputElement>(null);
   const textareaRefImage = useRef<HTMLTextAreaElement>(null);
   const textareaRefVideo = useRef<HTMLTextAreaElement>(null);
@@ -163,12 +162,9 @@ export const SceneCard = ({
       : "w-full h-[400px]";
 
   return (
-    <Reorder.Item
-      value={scene}
+    <div
       id={scene.id}
       className={`group relative perspective-1000 ${containerClasses}`}
-      dragListener={false}
-      dragControls={dragControls}
     >
       <motion.div
         className="w-full h-full relative preserve-3d transition-transform duration-700"
@@ -190,12 +186,6 @@ export const SceneCard = ({
                   <CheckCircle2 size={10} /> DISEÑADA
                 </div>
               )}
-              <div 
-                onPointerDown={(e) => dragControls.start(e)}
-                className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-[#D4AF37] transition-all touch-none"
-              >
-                <GripVertical size={16} />
-              </div>
             </div>
           </header>
 
@@ -213,7 +203,7 @@ export const SceneCard = ({
 
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4 overflow-hidden">
             <div className="flex-[1.5] flex flex-col min-w-0">
-               <div className="text-[10px] text-[#D4AF37] font-bold uppercase tracking-widest mb-2 opacity-70">PROMPT VISUAL</div>
+
                <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] ${isFrontExpanded ? 'h-40' : 'h-24'}`}>
                  {scene.asset ? (
                    <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
@@ -300,12 +290,7 @@ export const SceneCard = ({
 
             <div className="flex items-center gap-3">
                {scene.asset && <div className="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-violet-600 text-white">READY</div>}
-               <div 
-                  onPointerDown={(e) => dragControls.start(e)}
-                  className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-violet-400 transition-all touch-none"
-               >
-                  <GripVertical size={16} />
-               </div>
+
             </div>
           </header>
 
@@ -369,6 +354,6 @@ export const SceneCard = ({
           </div>
         </div>
       </motion.div>
-    </Reorder.Item>
+    </div>
   );
 };
