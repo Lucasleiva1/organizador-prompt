@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Copy, 
   Trash2, 
@@ -11,7 +11,8 @@ import {
   Lightbulb,
   Music,
   Zap,
-  Trash
+  Trash,
+  Minimize2
 } from "lucide-react";
 import { Scene } from "../types";
 import { AssetManager } from "../utils/AssetManager";
@@ -201,7 +202,7 @@ export const SceneCard = ({
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4 overflow-hidden">
             <div className="flex-[1.5] flex flex-col min-w-0">
 
-               <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] ${isFrontExpanded ? 'h-40' : 'h-24'}`}>
+               <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-24`}>
                  {scene.asset ? (
                    <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
                  ) : (
@@ -212,11 +213,40 @@ export const SceneCard = ({
                  <input type="file" ref={fileInputRefFront} className="hidden" accept="image/*" onChange={handleFileSelect} />
                  {scene.asset && (
                     <div className="absolute bottom-2 right-2 flex gap-1">
-                       <button onClick={() => setIsFrontExpanded(!isFrontExpanded)} className="p-1 bg-black/60 rounded text-white/50 hover:text-white"><Maximize2 size={12}/></button>
+                       <button onClick={() => setIsFrontExpanded(true)} className="p-1 bg-black/60 rounded text-white/50 hover:text-white transition-all hover:scale-110"><Maximize2 size={12}/></button>
                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 bg-black/60 rounded text-red-400/50 hover:text-red-400"><Trash2 size={12}/></button>
                     </div>
                  )}
                </div>
+
+               {/* FULL CARD IMAGE OVERLAY */}
+               <AnimatePresence>
+                 {isFrontExpanded && scene.asset && (
+                   <motion.div 
+                     initial={{ opacity: 0, scale: 0.9 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     exit={{ opacity: 0, scale: 0.9 }}
+                     className="absolute inset-0 z-50 bg-[#050505] rounded-xl flex flex-col p-4 border-2 border-[#D4AF37]/30 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+                   >
+                     <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-2">
+                        <div className="text-[10px] text-[#D4AF37] font-black uppercase tracking-[.3em]">PREVISUALIZACIÓN DE PLANO</div>
+                        <button 
+                          onClick={() => setIsFrontExpanded(false)}
+                          className="p-1.5 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 rounded-lg hover:bg-[#D4AF37]/20 transition-all"
+                        >
+                          <Minimize2 size={14} />
+                        </button>
+                     </div>
+                     <div className="flex-1 relative overflow-hidden rounded-lg bg-black/40 border border-white/5">
+                        <img 
+                          src={assetUrl} 
+                          alt="Expanded View" 
+                          className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(212,175,55,0.1)]"
+                        />
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
                
                <div className={`relative flex-1 group/textarea min-h-[100px] ${!isEditingImage ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingImage(true)}>
                   <textarea
