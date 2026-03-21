@@ -265,7 +265,7 @@ export const WorkspaceInstance = ({
 
   const exportToPDF = async () => {
     if (localScenes.length === 0) {
-      alert("No hay escenas para exportar.");
+      alert("No hay planos para exportar.");
       return;
     }
     try {
@@ -318,7 +318,7 @@ export const WorkspaceInstance = ({
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text(`ESCENA #${i + 1} | ESTADO: ${scene.asset ? 'APROBADA' : 'BORRADOR'}`, 15, yPos + 5.5);
+        doc.text(`PLANO #${i + 1} | ESTADO: ${scene.asset ? 'APROBADA' : 'BORRADOR'}`, 15, yPos + 5.5);
 
         const contentY = yPos + 12;
 
@@ -407,7 +407,7 @@ export const WorkspaceInstance = ({
           {workspace.name && (
             <span className="text-slate-300 font-black text-sm uppercase tracking-wider">{workspace.name}</span>
           )}
-          <span className="text-[10px] text-slate-500 font-medium">{localScenes.length} escena{localScenes.length !== 1 ? 's' : ''}</span>
+          <span className="text-[10px] text-slate-500 font-medium">{localScenes.length} {localScenes.length === 1 ? 'plano' : 'planos'}</span>
         </div>
         <ChevronRight size={16} className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
       </motion.div>
@@ -478,7 +478,7 @@ export const WorkspaceInstance = ({
           <button 
             onClick={exportToPDF}
             className="p-2.5 text-[#D4AF37]/60 hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-xl transition-all flex items-center justify-center border border-transparent hover:border-[#D4AF37]/20"
-            title="Exportar Escenas a PDF"
+            title="Exportar Planos a PDF"
           >
             <FileDown size={18} />
           </button>
@@ -507,7 +507,7 @@ export const WorkspaceInstance = ({
               </div>
               <h3 className="text-2xl font-bold text-white mb-3 tracking-tighter">¿ELIMINAR ESTA SECCIÓN?</h3>
               <p className="text-slate-400 text-sm mb-10 font-medium leading-relaxed">
-                Se borrarán todas las escenas asociadas. Esta acción no se puede deshacer.
+                Se borrarán todos los planos asociados. Esta acción no se puede deshacer.
               </p>
               <div className="flex gap-4">
                 <button 
@@ -544,7 +544,7 @@ export const WorkspaceInstance = ({
           <h2 className="text-xs font-bold mb-3 flex items-center gap-3 text-slate-300">
             <FileText size={16} /> IMPORTAR MARKDOWN
           </h2>
-          <p className="text-[10px] text-slate-500 mb-3">Las escenas importadas aquí pertenecen solo a esta sección.</p>
+          <p className="text-[10px] text-slate-500 mb-3">Los planos importados aquí pertenecen solo a esta sección.</p>
           <div className="flex flex-col gap-2 mb-3">
             <h3 className="text-[9px] font-bold text-slate-500 mb-1 flex items-center gap-1"><ImageIcon size={10}/> LISTA / TABLA IMÁGENES</h3>
             <textarea
@@ -595,7 +595,7 @@ export const WorkspaceInstance = ({
           </div>
           <div className="mt-4 text-center border-t border-[#222] pt-4">
             <div className="text-sm font-semibold text-slate-300">{filteredLocalScenes.length}</div>
-            <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Total Escenas</div>
+            <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Total Planos</div>
           </div>
         </div>
       </aside>

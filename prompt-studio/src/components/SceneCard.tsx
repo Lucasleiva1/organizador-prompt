@@ -11,7 +11,6 @@ import {
   Lightbulb,
   Music,
   Zap,
-  CheckCircle2,
   Trash
 } from "lucide-react";
 import { Scene } from "../types";
@@ -174,32 +173,26 @@ export const SceneCard = ({
         <div className={`absolute inset-0 backface-hidden rounded-xl border-2 bg-[#111] p-3 flex flex-col transition-all duration-300
             ${isVideo ? "border-transparent opacity-0 pointer-events-none" : "border-[#D4AF37] hover:shadow-[0_0_15px_rgba(212,175,55,0.1)] opacity-100"}`}
         >
-          <header className="flex justify-between items-center mb-2 shrink-0 px-1">
-            <div className="text-white font-bold tracking-widest text-sm uppercase flex items-center gap-2">
-              ESCENA #{index + 1}
-              {showTranslateImage && <span className="text-[#D4AF37] text-[9px] border border-[#D4AF37]/50 rounded px-1">(EN)</span>}
+          <header className="flex justify-between items-center mb-4 shrink-0 px-1">
+            <div className="flex items-center gap-4">
+              <div className="text-white font-bold tracking-widest text-[11px] uppercase flex items-center gap-2">
+                PLANO #{index + 1}
+                {showTranslateImage && <span className="text-[#D4AF37] text-[9px] border border-[#D4AF37]/50 rounded px-1">(EN)</span>}
+              </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              {scene.asset && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-[#D4AF37] text-black">
-                  <CheckCircle2 size={10} /> DISEÑADA
-                </div>
-              )}
+            <div className="flex items-center gap-2.5">
+               <div className="flex bg-black/60 rounded-lg p-0.5 border border-white/5">
+                  <button onClick={() => setShowTranslateImage(false)} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${!showTranslateImage ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>ES</button>
+                  <button onClick={() => { setShowTranslateImage(true); if (!scene.translatedImageText) onTranslate(scene.id, "image"); }} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${showTranslateImage ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>EN</button>
+               </div>
+               <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
+                  <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
+                  <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Video" />
+                  <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
+               </div>
             </div>
           </header>
-
-          <div className="flex items-center justify-between mb-3 shrink-0 px-1">
-             <div className="flex bg-black rounded-md p-0.5 border border-[#333]">
-                <button onClick={() => setShowTranslateImage(false)} className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${!showTranslateImage ? 'bg-[#222] text-white' : 'text-slate-500 hover:text-white'}`}>ES</button>
-                <button onClick={() => { setShowTranslateImage(true); if (!scene.translatedImageText) onTranslate(scene.id, "image"); }} className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${showTranslateImage ? 'bg-[#222] text-white' : 'text-slate-500 hover:text-white'}`}>EN</button>
-              </div>
-              <div className="flex gap-1 bg-black p-1 rounded-lg border border-[#333] items-center">
-                <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nueva Escena" />
-                <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Video" />
-                <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
-              </div>
-          </div>
 
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4 overflow-hidden">
             <div className="flex-[1.5] flex flex-col min-w-0">
@@ -282,29 +275,26 @@ export const SceneCard = ({
         <div className={`absolute inset-0 backface-hidden rotate-y-180 rounded-xl border-2 bg-[#111] p-3 flex flex-col transition-all duration-300
             ${!isVideo ? "border-transparent opacity-0 pointer-events-none" : "border-violet-500 hover:shadow-[0_0_15px_rgba(139,92,246,0.1)] opacity-100"}`}
         >
-          <header className="flex justify-between items-center mb-2 shrink-0 px-1">
-            <div className="text-white font-bold tracking-widest text-sm uppercase flex items-center gap-2">
-              ESCENA #{index + 1}
-              {showTranslateVideo && <span className="text-violet-400 text-[9px] border border-violet-500/50 rounded px-1">(EN)</span>}
+          <header className="flex justify-between items-center mb-4 shrink-0 px-1">
+            <div className="flex items-center gap-4">
+              <div className="text-white font-bold tracking-widest text-[11px] uppercase flex items-center gap-2">
+                PLANO #{index + 1}
+                {showTranslateVideo && <span className="text-violet-400 text-[9px] border border-violet-500/50 rounded px-1">(EN)</span>}
+              </div>
             </div>
-
-            <div className="flex items-center gap-3">
-               {scene.asset && <div className="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-violet-600 text-white">READY</div>}
-
+            
+            <div className="flex items-center gap-2.5">
+               <div className="flex bg-black/60 rounded-lg p-0.5 border border-white/5">
+                  <button onClick={() => setShowTranslateVideo(false)} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${!showTranslateVideo ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>ES</button>
+                  <button onClick={() => { setShowTranslateVideo(true); if (!scene.translatedVideoText) onTranslate(scene.id, "video"); }} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${showTranslateVideo ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>EN</button>
+               </div>
+               <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
+                  <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
+                  <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Imagen" />
+                  <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
+               </div>
             </div>
           </header>
-
-          <div className="flex items-center justify-between mb-3 shrink-0 px-1">
-             <div className="flex bg-black rounded-md p-0.5 border border-[#333]">
-                <button onClick={() => setShowTranslateVideo(false)} className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${!showTranslateVideo ? 'bg-[#222] text-white' : 'text-slate-500 hover:text-white'}`}>ES</button>
-                <button onClick={() => { setShowTranslateVideo(true); if (!scene.translatedVideoText) onTranslate(scene.id, "video"); }} className={`px-2 py-0.5 text-[9px] font-bold rounded transition-all ${showTranslateVideo ? 'bg-[#222] text-white' : 'text-slate-500 hover:text-white'}`}>EN</button>
-              </div>
-              <div className="flex gap-1 bg-black p-1 rounded-lg border border-[#333] items-center">
-                <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nueva Escena" />
-                <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Imagen" />
-                <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
-              </div>
-          </div>
 
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
              <div className="flex-[1.5] flex flex-col min-w-0">
