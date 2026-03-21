@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
-import { Reorder, motion } from "framer-motion";
+import { Reorder, motion, useDragControls } from "framer-motion";
 import { 
   Copy, 
   Trash2, 
@@ -12,7 +12,8 @@ import {
   Music,
   Zap,
   CheckCircle2,
-  Trash
+  Trash,
+  GripVertical
 } from "lucide-react";
 import { Scene } from "../types";
 import { AssetManager } from "../utils/AssetManager";
@@ -96,6 +97,7 @@ export const SceneCard = ({
   duplicateScene,
   onTranslate,
   isVertical = false,
+  isCarousel = false,
 }: {
   scene: Scene;
   index: number;
@@ -104,6 +106,7 @@ export const SceneCard = ({
   duplicateScene: (id: string) => void;
   onTranslate: (id: string, mode: "image" | "video") => void;
   isVertical?: boolean;
+  isCarousel?: boolean;
 }) => {
   const isVideo = scene.mode === "video";
   const [showTranslateImage, setShowTranslateImage] = useState(false);
@@ -112,6 +115,7 @@ export const SceneCard = ({
   const [isEditingVideo, setIsEditingVideo] = useState(false);
   const [isFrontExpanded, setIsFrontExpanded] = useState(false);
   
+  const dragControls = useDragControls();
   const fileInputRefFront = useRef<HTMLInputElement>(null);
   const textareaRefImage = useRef<HTMLTextAreaElement>(null);
   const textareaRefVideo = useRef<HTMLTextAreaElement>(null);
@@ -152,12 +156,19 @@ export const SceneCard = ({
     updateScene(scene.id, { mode: isVideo ? "image" : "video" });
   };
 
+  const containerClasses = isCarousel 
+    ? "min-w-[350px] w-[350px] md:w-[450px] md:min-w-[450px] h-[400px] flex-shrink-0"
+    : isVertical 
+      ? "w-full min-h-[400px]" 
+      : "w-full h-[400px]";
+
   return (
     <Reorder.Item
       value={scene}
       id={scene.id}
-      className={`group relative perspective-1000 ${isVertical ? 'w-full min-h-[400px]' : 'h-[400px]'}`}
+      className={`group relative perspective-1000 ${containerClasses}`}
       dragListener={false}
+      dragControls={dragControls}
     >
       <motion.div
         className="w-full h-full relative preserve-3d transition-transform duration-700"
@@ -172,11 +183,20 @@ export const SceneCard = ({
               ESCENA #{index + 1}
               {showTranslateImage && <span className="text-[#D4AF37] text-[9px] border border-[#D4AF37]/50 rounded px-1">(EN)</span>}
             </div>
-            {scene.asset && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-[#D4AF37] text-black">
-                <CheckCircle2 size={10} /> DISEÑADA
+            
+            <div className="flex items-center gap-3">
+              {scene.asset && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-[#D4AF37] text-black">
+                  <CheckCircle2 size={10} /> DISEÑADA
+                </div>
+              )}
+              <div 
+                onPointerDown={(e) => dragControls.start(e)}
+                className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-[#D4AF37] transition-all touch-none"
+              >
+                <GripVertical size={16} />
               </div>
-            )}
+            </div>
           </header>
 
           <div className="flex items-center justify-between mb-3 shrink-0 px-1">
@@ -192,7 +212,6 @@ export const SceneCard = ({
           </div>
 
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4 overflow-hidden">
-            {/* Left side: Preview + Prompt */}
             <div className="flex-[1.5] flex flex-col min-w-0">
                <div className="text-[10px] text-[#D4AF37] font-bold uppercase tracking-widest mb-2 opacity-70">PROMPT VISUAL</div>
                <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] ${isFrontExpanded ? 'h-40' : 'h-24'}`}>
@@ -212,7 +231,7 @@ export const SceneCard = ({
                  )}
                </div>
                
-               <div className={`relative flex-1 group/textarea min-h-[100px] ${!isEditingImage ? 'cursor-grab' : ''}`} onDoubleClick={() => setIsEditingImage(true)}>
+               <div className={`relative flex-1 group/textarea min-h-[100px] ${!isEditingImage ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingImage(true)}>
                   <textarea
                     className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingImage ? 'pointer-events-none' : 'focus:border-[#D4AF37]/50'}`}
                     value={showTranslateImage ? (scene.translatedImageText || "Traduciendo...") : scene.imageText}
@@ -229,7 +248,6 @@ export const SceneCard = ({
                </div>
             </div>
 
-            {/* Right side: Technical list */}
             <div className="flex-1 border-l border-[#222] pl-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0 bg-[#0c0c0c]/50">
                <div className="space-y-4 pt-1">
                   <div className="technical-box">
@@ -279,7 +297,16 @@ export const SceneCard = ({
               ESCENA #{index + 1}
               {showTranslateVideo && <span className="text-violet-400 text-[9px] border border-violet-500/50 rounded px-1">(EN)</span>}
             </div>
-            {scene.asset && <div className="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-violet-600 text-white">READY</div>}
+
+            <div className="flex items-center gap-3">
+               {scene.asset && <div className="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-widest bg-violet-600 text-white">READY</div>}
+               <div 
+                  onPointerDown={(e) => dragControls.start(e)}
+                  className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-violet-400 transition-all touch-none"
+               >
+                  <GripVertical size={16} />
+               </div>
+            </div>
           </header>
 
           <div className="flex items-center justify-between mb-3 shrink-0 px-1">
@@ -297,7 +324,7 @@ export const SceneCard = ({
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
              <div className="flex-[1.5] flex flex-col min-w-0">
                 <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2 opacity-70">VIDEO PROMPT</div>
-                <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-grab' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
+                <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
                     <textarea
                       className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingVideo ? 'pointer-events-none' : 'focus:border-violet-500/50'}`}
                       value={showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText}
@@ -321,7 +348,7 @@ export const SceneCard = ({
                     <span className="text-[9px] text-violet-400 font-bold uppercase tracking-widest">ÓPTICA & SENSOR</span>
                   </div>
                   <ul className="text-[10px] text-slate-400 space-y-1 list-none">
-                      {(parsedBack.optics || scene.optics || 'Flow cinematic').split(',').map((o: string, i: number) => (
+                      {(parsedBack.optics || scene.optics || 'Configurar...').split(',').map((o: string, i: number) => (
                         <li key={i} className="flex gap-2"><span className="text-violet-400/40">•</span> {o.trim()}</li>
                       ))}
                   </ul>

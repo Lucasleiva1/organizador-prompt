@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, FileDown } from "lucide-react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { Scene, Workspace } from "../types";
@@ -46,10 +46,12 @@ export const WorkspaceInstance = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
+  
+  const carouselOuterRef = useRef<HTMLDivElement>(null);
+  const carouselInnerRef = useRef<HTMLDivElement>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
 
-
-
-  // Filter global scenes to just this workspace
+   // Filter global scenes to just this workspace
   const localScenes = useMemo(() => scenes.filter(s => (s.groupId || 'default') === workspace.id), [scenes, workspace.id]);
   
   const filteredLocalScenes = useMemo(() => {
@@ -62,6 +64,12 @@ export const WorkspaceInstance = ({
       (s.translatedVideoText || '').toLowerCase().includes(q)
     );
   }, [localScenes, search]);
+
+  useEffect(() => {
+    if (carouselInnerRef.current && carouselOuterRef.current) {
+      setCarouselWidth(carouselInnerRef.current.scrollWidth - carouselOuterRef.current.offsetWidth + 200);
+    }
+  }, [filteredLocalScenes, viewMode]);
 
 
   const addPromptsToScenes = (rawText: string, mode: 'image' | 'video') => {
@@ -618,36 +626,45 @@ export const WorkspaceInstance = ({
             </motion.div>
           ) : viewMode === 'carousel' ? (
               <div 
-                className="w-full overflow-x-auto overflow-y-hidden pb-8 pt-4 px-2 snap-x snap-mandatory hide-scrollbar"
-                style={{ scrollbarWidth: 'none' }}
+                ref={carouselOuterRef}
+                className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing pb-8 pt-4 px-2"
               >
-                <Reorder.Group 
-                  axis="x" 
-                  values={filteredLocalScenes} 
-                  onReorder={(newOrder: Scene[]) => {
-                    if (!search.trim()) {
-                      const updatedScenes = [...scenes];
-                      const localIndices = scenes.map((s, i) => (s.groupId || 'default') === workspace.id ? i : -1).filter(i => i !== -1);
-                      newOrder.forEach((scene: Scene, idx: number) => {
-                        updatedScenes[localIndices[idx]] = scene;
-                      });
-                      saveScenes(updatedScenes);
-                    }
-                  }}
-                  className="flex flex-row gap-6 w-max px-4"
+                <motion.div 
+                  ref={carouselInnerRef}
+                  drag="x"
+                  dragConstraints={{ right: 0, left: -carouselWidth }}
+                  dragElastic={0.05}
+                  className="w-max"
                 >
-                  {filteredLocalScenes.map((scene, i) => (
-                    <SceneCard 
-                      key={scene.id}
-                      scene={scene} 
-                      index={i}
-                      updateScene={updateScene} 
-                      deleteScene={deleteScene} 
-                      duplicateScene={duplicateScene}
-                      onTranslate={handleTranslate}
-                    />
-                  ))}
-                </Reorder.Group>
+                  <Reorder.Group 
+                    axis="x" 
+                    values={filteredLocalScenes} 
+                    onReorder={(newOrder: Scene[]) => {
+                      if (!search.trim()) {
+                        const updatedScenes = [...scenes];
+                        const localIndices = scenes.map((s, i) => (s.groupId || 'default') === workspace.id ? i : -1).filter(i => i !== -1);
+                        newOrder.forEach((scene: Scene, idx: number) => {
+                          updatedScenes[localIndices[idx]] = scene;
+                        });
+                        saveScenes(updatedScenes);
+                      }
+                    }}
+                    className="flex flex-row gap-6 px-[100px]"
+                  >
+                    {filteredLocalScenes.map((scene, i) => (
+                      <SceneCard 
+                        key={scene.id}
+                        scene={scene} 
+                        index={i}
+                        updateScene={updateScene} 
+                        deleteScene={deleteScene} 
+                        duplicateScene={duplicateScene}
+                        onTranslate={handleTranslate}
+                        isCarousel={true}
+                      />
+                    ))}
+                  </Reorder.Group>
+                </motion.div>
               </div>
           ) : (
             <WorkspaceSection 
