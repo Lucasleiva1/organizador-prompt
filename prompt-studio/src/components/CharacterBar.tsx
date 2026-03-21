@@ -104,11 +104,11 @@ export const CharacterBar = ({ characters, addCharacter, deleteCharacter }: Char
   };
 
   return (
-    <div className="sticky top-[88px] lg:top-[104px] z-[55] w-full bg-[#020617]/80 backdrop-blur-xl border-y border-white/5 py-3 shadow-2xl overflow-hidden">
+    <div className="sticky top-[88px] lg:top-[104px] z-[55] w-full bg-[#020617]/80 backdrop-blur-xl border-y border-white/5 py-6 shadow-2xl overflow-hidden">
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6 flex items-center gap-4">
         
         {/* Left Control Area */}
-        <div className="flex items-center gap-3 pr-4 border-r border-white/10 shrink-0 min-w-[200px] min-h-[56px]">
+        <div className="flex items-center gap-3 pr-4 border-r border-white/10 shrink-0 min-w-[200px] min-h-[144px]">
           <AnimatePresence mode="wait">
             {selectedIds.size > 0 ? (
               <motion.div 
@@ -269,7 +269,7 @@ const CharacterThumb = ({ character, isSelected, onSelect, onDelete }: Character
             e.dataTransfer.effectAllowed = "copy";
           }
         }}
-        className={`w-20 h-20 lg:w-24 lg:h-24 rounded-2xl overflow-hidden border-2 shadow-xl cursor-pointer active:scale-95 transition-all relative ${
+        className={`w-36 h-36 lg:w-48 lg:h-48 rounded-2xl overflow-hidden border-2 shadow-xl cursor-pointer active:scale-95 transition-all relative ${
           isSelected 
           ? "border-emerald-400 ring-4 ring-emerald-500/30" 
           : "border-white/10 bg-slate-800"
@@ -283,15 +283,15 @@ const CharacterThumb = ({ character, isSelected, onSelect, onDelete }: Character
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-600">
-            <User size={24} />
+            <User size={32} />
           </div>
         )}
 
         {/* Selection Checkmark */}
         {isSelected && (
           <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
-            <div className="bg-emerald-500 rounded-full p-2 shadow-lg transform scale-110">
-              <Check size={14} className="text-white" strokeWidth={4} />
+            <div className="bg-emerald-500 rounded-full p-3 shadow-lg transform scale-125">
+              <Check size={20} className="text-white" strokeWidth={4} />
             </div>
           </div>
         )}
