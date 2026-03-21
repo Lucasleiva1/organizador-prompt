@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Moon, Monitor, Sun, Plus, Sparkles, Trash2, Save, FolderOpen, Film, Settings, ChevronDown } from "lucide-react";
+import { Moon, Monitor, Sun, Plus, Sparkles, Trash2, Save, FolderOpen, Film, Settings, ChevronDown, FolderPlus } from "lucide-react";
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { load } from "@tauri-apps/plugin-store";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
+import { documentDir, join } from "@tauri-apps/api/path";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { Scene, Workspace, Character, Script } from "./types";
 import { WorkspaceInstance } from "./components/WorkspaceInstance";
@@ -123,6 +125,31 @@ const useWorkspaceStore = () => {
   return { workspaces, setWorkspaces: saveWorkspaces, loading };
 };
 
+const useSettingsStore = () => {
+  const [settings, setSettings] = useState<any>(null);
+  const [store, setStore] = useState<any>(null);
+
+  useEffect(() => {
+    const init = async () => {
+      const s = await load("settings.json", { autoSave: true, defaults: { visibility: { showTheme: true, showSave: true, showLoad: true, showProjectFolder: true, showScripts: true, showClear: true } } });
+      setStore(s);
+      const v = await s.get("visibility");
+      if (v) setSettings(v);
+    };
+    init();
+  }, []);
+
+  const saveSettings = async (v: any) => {
+    setSettings(v);
+    if (store) {
+      await store.set("visibility", v);
+      await store.save();
+    }
+  };
+
+  return { settings, saveSettings };
+};
+
 const useCharacterStore = () => {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,24 +245,45 @@ const useScriptStore = () => {
 
 
 
-const NavButton = ({ icon: Icon, label, onClick, color }: any) => {
-  const styles: any = { emerald: "text-emerald-400 hover:bg-emerald-500/10", red: "text-red-400 hover:bg-red-500/10", default: "text-slate-400 hover:bg-white/5" };
-  return (
-    <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded font-bold text-xs transition-all border border-transparent hover:border-white/5 ${styles[color] || styles.default}`}><Icon size={15} /> {label}</button>
-  );
-};
+
 
 export default function App() {
   const { scenes, saveScenes, loading: loadingScenes } = useSceneStore();
   const { workspaces, setWorkspaces, loading: loadingWorkspaces } = useWorkspaceStore();
   const { characters, addCharacter, deleteCharacter } = useCharacterStore();
   const { scripts, saveScripts, loading: loadingScripts } = useScriptStore();
+  const { settings, saveSettings } = useSettingsStore();
+
+  const [isTranslateEn] = useState(false);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [folderName, setFolderName] = useState("");
+  const [visibility, setVisibility] = useState({
+    showTheme: true,
+    showSave: true,
+    showLoad: true,
+    showProjectFolder: true,
+    showScripts: true,
+    showClear: true
+  });
+
   const [isScriptManagerOpen, setIsScriptManagerOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'inter' | 'light'>(() => (localStorage.getItem('ps-theme') as any) || 'inter');
   useEffect(() => { localStorage.setItem('ps-theme', theme); }, [theme]);
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
+
+  const { translate } = useTranslate();
+  const prevScenesRef = useRef<Scene[]>([]);
+  useEffect(() => {
+    prevScenesRef.current = scenes;
+  }, [scenes]);
+
+  useEffect(() => {
+    if (settings) {
+      setVisibility(settings);
+    }
+  }, [settings]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -301,14 +349,6 @@ export default function App() {
     }
   };
 
-  const [isTranslateEn] = useState(false);
-  const { translate } = useTranslate();
-
-  const prevScenesRef = useRef<Scene[]>([]);
-  useEffect(() => {
-    prevScenesRef.current = scenes;
-  }, [scenes]);
-
   const updateScene = (id: string, data: Partial<Scene>) => { saveScenes(scenes.map((s) => (s.id === id ? { ...s, ...data } : s))); };
   const deleteScene = async (id: string) => {
     const scene = scenes.find(s => s.id === id);
@@ -370,6 +410,24 @@ export default function App() {
     }
   };
 
+  const handleCreateProjectFolder = async () => {
+    if (!folderName.trim()) return;
+
+    try {
+      const docs = await documentDir();
+      const studioPath = await join(docs, "Prompt Studio");
+      const projectPath = await join(studioPath, folderName.trim());
+
+      await mkdir(projectPath, { recursive: true });
+      await revealItemInDir([projectPath]);
+      setIsFolderModalOpen(false);
+      setFolderName("");
+    } catch (err) {
+      console.error("Error creating project folder:", err);
+      alert("No se pudo crear la carpeta. Asegúrate de tener permisos en Documentos.");
+    }
+  };
+
   const addGeneratedScenes = (panels: any[]) => {
     const newScenes: Scene[] = [
       ...scenes,
@@ -415,42 +473,72 @@ export default function App() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setIsScriptManagerOpen(!isScriptManagerOpen)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded font-bold text-xs transition-all ${isScriptManagerOpen ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "bg-slate-800/40 text-slate-400 hover:bg-white/5 border border-white/5"}`}
-            >
-              <div className={`w-2 h-2 rounded-full mr-1 transition-all ${isScriptManagerOpen ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-500"}`} />
-              GUIONES
-            </button>
-            <div className="w-px h-6 bg-white/5 mx-1" />
-            <NavButton icon={Trash2} label="LIMPIAR TODO" onClick={async () => { 
-              if (confirm("¿Estás seguro de eliminar todas las escenas?")) {
-                for (const scene of scenes) {
-                  if (scene.asset) await AssetManager.deleteAsset(scene.asset);
-                }
-                saveScenes([]); 
-              }
-            }} color="red" />
-            <div className="flex items-center bg-slate-800/60 p-1 rounded border border-white/5">
-              <button onClick={() => setTheme('dark')} className={`p-1.5 rounded-sm transition-all ${theme === 'dark' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Moon size={14}/></button>
-              <button onClick={() => setTheme('inter')} className={`p-1.5 rounded-sm transition-all ${theme === 'inter' ? 'bg-slate-700 text-cyan-300 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Monitor size={14}/></button>
-              <button onClick={() => setTheme('light')} className={`p-1.5 rounded-sm transition-all ${theme === 'light' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Sun size={14}/></button>
-            </div>
+            {visibility.showProjectFolder && (
+              <button
+                onClick={() => setIsFolderModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/20 hover:border-violet-500/40 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)]"
+              >
+                <FolderPlus size={14} />
+                CREAR PROYECTO
+              </button>
+            )}
 
-            <button
-              onClick={saveProject}
-              className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/15 hover:border-emerald-400/60 hover:shadow-[0_0_18px_rgba(52,211,153,0.35)] hover:text-emerald-300"
-              title="Guardar proyecto como archivo JSON"
-            >
-              <Save size={13} /> GUARDAR
-            </button>
-            <button
-              onClick={loadProject}
-              className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-violet-500/20 text-violet-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/15 hover:border-violet-400/60 hover:shadow-[0_0_18px_rgba(167,139,250,0.35)] hover:text-violet-300"
-              title="Cargar proyecto desde archivo JSON"
-            >
-              <FolderOpen size={13} /> CARGAR
-            </button>
+            {visibility.showScripts && (
+              <button 
+                onClick={() => setIsScriptManagerOpen(!isScriptManagerOpen)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded font-bold text-xs transition-all ${isScriptManagerOpen ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "bg-slate-800/40 text-slate-400 hover:bg-white/5 border border-white/5"}`}
+              >
+                <div className={`w-2 h-2 rounded-full mr-1 transition-all ${isScriptManagerOpen ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-500"}`} />
+                GUIONES
+              </button>
+            )}
+
+            <div className="w-px h-6 bg-white/5 mx-1" />
+
+            {visibility.showClear && (
+               <button 
+                onClick={async () => { 
+                  if (confirm("¿Estás seguro de eliminar todas las escenas?")) {
+                    for (const scene of scenes) {
+                      if (scene.asset) await AssetManager.deleteAsset(scene.asset);
+                    }
+                    saveScenes([]); 
+                  }
+                }} 
+                className="flex items-center gap-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-red-500 font-bold text-[10px] tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                title="Limpiar todas las escenas"
+               >
+                 <Trash2 size={14} /> LIMPIAR
+               </button>
+            )}
+
+            {visibility.showTheme && (
+              <div className="flex items-center bg-slate-800/60 p-1 rounded border border-white/5">
+                <button onClick={() => setTheme('dark')} className={`p-1.5 rounded-sm transition-all ${theme === 'dark' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Moon size={12}/></button>
+                <button onClick={() => setTheme('inter')} className={`p-1.5 rounded-sm transition-all ${theme === 'inter' ? 'bg-slate-700 text-cyan-300 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Monitor size={12}/></button>
+                <button onClick={() => setTheme('light')} className={`p-1.5 rounded-sm transition-all ${theme === 'light' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Sun size={12}/></button>
+              </div>
+            )}
+
+            {visibility.showSave && (
+              <button
+                onClick={saveProject}
+                className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/15 hover:border-emerald-400/60 hover:shadow-[0_0_18px_rgba(52,211,153,0.35)] hover:text-emerald-300"
+                title="Guardar proyecto como archivo JSON"
+              >
+                <Save size={13} /> GUARDAR
+              </button>
+            )}
+
+            {visibility.showLoad && (
+              <button
+                onClick={loadProject}
+                className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-violet-500/20 text-violet-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/15 hover:border-violet-400/60 hover:shadow-[0_0_18px_rgba(167,139,250,0.35)] hover:text-violet-300"
+                title="Cargar proyecto desde archivo JSON"
+              >
+                <FolderOpen size={13} /> CARGAR
+              </button>
+            )}
             
             <div className="w-px h-6 bg-white/5 mx-1" />
 
@@ -486,6 +574,74 @@ export default function App() {
                       <button onClick={() => changeResolution(1024, 768)} className="text-left px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex justify-between items-center group">
                         1024 x 768 <span className="text-[9px] text-slate-600 group-hover:text-emerald-400 uppercase tracking-widest">Modo Chico</span>
                       </button>
+                    </div>
+
+                    <div className="p-3 border-t border-[#333] bg-[#111]">
+                      <h3 className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Tema Visual</h3>
+                    </div>
+                    <div className="p-2 grid grid-cols-3 gap-1 border-b border-[#333]">
+                      <button 
+                        onClick={() => setTheme('dark')}
+                        className={`flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-500 hover:bg-white/5 border border-transparent'}`}
+                      >
+                        <Moon size={14} />
+                        <span className="text-[8px] font-black uppercase">Oscuro</span>
+                      </button>
+                      <button 
+                        onClick={() => setTheme('inter')}
+                        className={`flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all ${theme === 'inter' ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-slate-500 hover:bg-white/5 border border-transparent'}`}
+                      >
+                        <Monitor size={14} />
+                        <span className="text-[8px] font-black uppercase">Inter</span>
+                      </button>
+                      <button 
+                        onClick={() => setTheme('light')}
+                        className={`flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all ${theme === 'light' ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' : 'text-slate-500 hover:bg-white/5 border border-transparent'}`}
+                      >
+                        <Sun size={14} />
+                        <span className="text-[8px] font-black uppercase">Claro</span>
+                      </button>
+                    </div>
+
+                    <div className="p-3 border-t border-[#333] bg-[#0c0c0c] flex items-center justify-between">
+                      <h3 className="text-[9px] text-slate-500 uppercase tracking-widest font-black">Visibilidad de Barra</h3>
+                    </div>
+                    <div className="p-3 flex flex-col gap-2 border-b border-[#333]">
+                       <MiniToggle 
+                          icon={Monitor} 
+                          label="Temas" 
+                          isActive={visibility.showTheme} 
+                          onToggle={() => saveSettings({...visibility, showTheme: !visibility.showTheme})} 
+                       />
+                       <MiniToggle 
+                          icon={Save} 
+                          label="Guardar" 
+                          isActive={visibility.showSave} 
+                          onToggle={() => saveSettings({...visibility, showSave: !visibility.showSave})} 
+                       />
+                       <MiniToggle 
+                          icon={FolderOpen} 
+                          label="Cargar" 
+                          isActive={visibility.showLoad} 
+                          onToggle={() => saveSettings({...visibility, showLoad: !visibility.showLoad})} 
+                       />
+                       <MiniToggle 
+                          icon={FolderPlus} 
+                          label="Crear Proyecto" 
+                          isActive={visibility.showProjectFolder} 
+                          onToggle={() => saveSettings({...visibility, showProjectFolder: !visibility.showProjectFolder})} 
+                       />
+                       <MiniToggle 
+                          icon={Trash2} 
+                          label="Limpiar Todo" 
+                          isActive={visibility.showClear} 
+                          onToggle={() => saveSettings({...visibility, showClear: !visibility.showClear})} 
+                       />
+                    </div>
+
+                    <div className="mt-auto p-4 bg-black/40 flex gap-2">
+                       <button onClick={saveProject} className="flex-1 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all" title="Guardar Proyecto"><Save size={14}/></button>
+                       <button onClick={loadProject} className="flex-1 p-2 bg-violet-500/10 border border-violet-500/20 rounded-lg text-violet-400 hover:bg-violet-500 hover:text-white transition-all" title="Cargar Proyecto"><FolderOpen size={14}/></button>
                     </div>
                   </motion.div>
                 )}
@@ -565,6 +721,88 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {isFolderModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsFolderModalOpen(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-[#0a0a0a] border border-[#222] rounded-3xl p-8 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/10 rounded-full blur-3xl -mr-16 -mt-16" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-600/5 rounded-full blur-3xl -ml-16 -mb-16" />
+
+              <div className="relative">
+                <div className="w-12 h-12 bg-violet-500/10 rounded-2xl flex items-center justify-center text-violet-400 mb-6 border border-violet-500/20">
+                  <FolderPlus size={24} />
+                </div>
+                
+                <h2 className="text-xl font-black text-white mb-2 tracking-tight">NUEVO PROYECTO</h2>
+                <p className="text-sm text-slate-400 mb-8 leading-relaxed">
+                  Crea una carpeta donde vas a poder guardar todo lo relacionado con este proyecto. 
+                  Esto se creará en <span className="text-violet-400 font-medium">Documentos/Prompt Studio/</span>
+                </p>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">NOMBRE DE LA CARPETA</label>
+                    <input
+                      type="text"
+                      autoFocus
+                      className="w-full bg-black/50 border border-[#222] rounded-xl px-4 py-3.5 text-slate-200 outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 transition-all placeholder:text-slate-700"
+                      placeholder="Ej: El Ritual de la 14"
+                      value={folderName}
+                      onChange={(e) => setFolderName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreateProjectFolder()}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setIsFolderModalOpen(false)}
+                      className="flex-1 px-4 py-3.5 rounded-xl bg-slate-800/40 text-slate-400 text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all"
+                    >
+                      CANCELAR
+                    </button>
+                    <button
+                      onClick={handleCreateProjectFolder}
+                      disabled={!folderName.trim()}
+                      className="flex-[1.5] px-4 py-3.5 rounded-xl bg-violet-500 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-violet-500/20 hover:bg-violet-400 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                    >
+                      CREAR CARPETA
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+const MiniToggle = ({ icon: Icon, label, isActive, onToggle }: any) => (
+  <button 
+    onClick={onToggle}
+    className={`w-full flex items-center justify-between p-2 rounded-lg transition-all ${isActive ? 'bg-white/5 text-emerald-400' : 'bg-transparent text-slate-600 hover:text-slate-400'}`}
+  >
+    <div className="flex items-center gap-2">
+       <Icon size={12} />
+       <span className="text-[10px] font-bold uppercase tracking-tighter">{label}</span>
+    </div>
+    <div className={`w-8 h-4 rounded-full p-0.5 transition-all ${isActive ? 'bg-emerald-500' : 'bg-slate-800'}`}>
+       <div className={`w-3 h-3 bg-white rounded-full transition-all ${isActive ? 'translate-x-4' : 'translate-x-0'} shadow-sm`} />
+    </div>
+  </button>
+);
