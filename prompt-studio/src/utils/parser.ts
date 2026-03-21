@@ -103,20 +103,20 @@ export const parseMarkdownTable = (text: string, defaultSection: 'image' | 'vide
 export const parseSimpleText = (rawText: string, mode: "image" | "video"): Scene[] => {
   // Soporte para saltos de línea Windows/Unix
   const lines = rawText.split(/\r?\n/);
-  const chunks: string[] = [];
+  let parsedChunks: string[] = [];
   let currentChunk = "";
   
   // Patrones robustos de separación
   const numberPattern = /^\s*(?:\*\*)?\d+[\s\.\-\)]+/;
   const separatorPattern = /^\s*(?:---|\*\*\*|___)\s*$/;
-  const headerPattern = /^\s*#+\s+/;
+  const planoPattern = /^\s*(?:[\*\-\+]\s*)?(?:\[cite_start\])?\s*\*?\*?(?:PLANO|PANEL|ESCENA|SCENE|SHOT)\s*\d+/i;
 
   for (const line of lines) {
-    const isNewChunk = numberPattern.test(line) || separatorPattern.test(line) || headerPattern.test(line);
+    const isNewChunk = numberPattern.test(line) || separatorPattern.test(line) || planoPattern.test(line);
     
     if (isNewChunk) {
       if (currentChunk.trim()) {
-        chunks.push(currentChunk.trim());
+        parsedChunks.push(currentChunk.trim());
       }
       // El separador horizontal no se incluye en el contenido
       currentChunk = (separatorPattern.test(line)) ? "" : line + "\n";
@@ -126,18 +126,27 @@ export const parseSimpleText = (rawText: string, mode: "image" | "video"): Scene
   }
   
   if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
+    parsedChunks.push(currentChunk.trim());
+  }
+
+  // Fusionar headers huerfanos (como "SECCIÓN 1...") con el siguiente chunk
+  const mergedChunks: string[] = [];
+  for (let i = 0; i < parsedChunks.length; i++) {
+    const chunk = parsedChunks[i];
+    const isSectionHeader = /^\s*(?:\*\*)?(?:SECCI[ÓO]N|#)/i.test(chunk) && chunk.split('\n').length <= 3;
+    
+    if (isSectionHeader && i + 1 < parsedChunks.length) {
+       parsedChunks[i + 1] = chunk + "\n\n" + parsedChunks[i + 1];
+    } else {
+       mergedChunks.push(chunk);
+    }
   }
 
   // Si no se detectaron chunks, tratamos todo el texto como uno solo
-  const finalParts = chunks.length > 0 ? chunks : [rawText.trim()];
+  const finalParts = mergedChunks.length > 0 ? mergedChunks : [rawText.trim()];
 
   return finalParts
-    .filter(p => {
-        // Ignorar títulos muy cortos (como un simple # Título) si hay otros chunks reales
-        if (chunks.length > 1 && p.startsWith('#') && p.split('\n').length === 1) return false;
-        return p.trim().length > 0;
-    })
+    .filter(p => p.trim().length > 0)
     .map((p) => {
       let cleaned = p.trim()
         .replace(/^\s*(?:\*\*)?\d+[\s\.\-\)]+\s*(?:\*\*)?/, '')  

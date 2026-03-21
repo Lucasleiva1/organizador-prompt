@@ -1,11 +1,12 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, FileDown } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
 import { WorkspaceSection } from "./WorkspaceSection";
 import { SceneCard } from "./SceneCard";
 import { AssetManager } from "../utils/AssetManager";
+import { ProductionAgent } from "../utils/ProductionAgent";
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
@@ -41,22 +42,10 @@ export const WorkspaceInstance = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [imageMarkdown, setImageMarkdown] = useState("");
   const [videoMarkdown, setVideoMarkdown] = useState("");
+  // Workspace Section Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
-  
-  // Reference for Framer Motion drag constraints
-  const carouselOuterRef = useRef<HTMLDivElement>(null);
-  const carouselInnerRef = useRef<HTMLDivElement>(null);
-  const [carouselWidth, setCarouselWidth] = useState(0);
-
-  useEffect(() => {
-    if (carouselOuterRef.current && carouselInnerRef.current && viewMode === 'carousel') {
-      // Calculate how far left we can drag by subtracting outer container width from the inner content width
-      const width = carouselInnerRef.current.scrollWidth - carouselOuterRef.current.offsetWidth;
-      setCarouselWidth(width > 0 ? width : 0);
-    }
-  }, [scenes, search, viewMode]);
 
 
 
@@ -125,9 +114,12 @@ export const WorkspaceInstance = ({
     if (!rawText.trim()) return;
 
     const hasTable = rawText.includes('|') && (rawText.match(/\|/g) || []).length > 5;
-    let parsedRawScenes: Scene[];
+    const isTechnicalSheet = /PLANO|PANEL|ESCENA|SCENE|SHOT/i.test(rawText);
+    let parsedRawScenes: Scene[] = [];
     
-    if (hasTable) {
+    if (isTechnicalSheet) {
+      parsedRawScenes = ProductionAgent.parseSheet(rawText, workspace.id, workspace.theme || 'normal');
+    } else if (hasTable) {
       parsedRawScenes = parseMarkdownTable(rawText);
     } else {
       const hasImageSection = /im[aá]gen|est[aá]tic|📸/i.test(rawText);
@@ -142,8 +134,13 @@ export const WorkspaceInstance = ({
       }
     }
 
-    const imagePrompts = parsedRawScenes.filter(s => s.mode === 'image').map(s => s.imageText);
-    const videoPrompts = parsedRawScenes.filter(s => s.mode === 'video').map(s => s.videoText);
+    if (isTechnicalSheet) {
+      saveScenes([...scenes, ...parsedRawScenes]);
+      return;
+    }
+
+    const imagePrompts = parsedRawScenes.filter((s: Scene) => s.mode === 'image').map((s: Scene) => s.imageText);
+    const videoPrompts = parsedRawScenes.filter((s: Scene) => s.mode === 'video').map((s: Scene) => s.videoText);
 
     let newScenes: Scene[] = [];
     const maxLength = Math.max(imagePrompts.length, videoPrompts.length);
@@ -621,30 +618,36 @@ export const WorkspaceInstance = ({
             </motion.div>
           ) : viewMode === 'carousel' ? (
               <div 
-                ref={carouselOuterRef} 
-                className="w-full h-[500px] overflow-hidden cursor-grab active:cursor-grabbing pb-8 pt-4 px-2"
+                className="w-full overflow-x-auto overflow-y-hidden pb-8 pt-4 px-2 snap-x snap-mandatory hide-scrollbar"
+                style={{ scrollbarWidth: 'none' }}
               >
-                <motion.div 
-                  ref={carouselInnerRef}
-                  drag="x"
-                  dragConstraints={{ right: 0, left: -carouselWidth }}
-                  dragElastic={0.05}
+                <Reorder.Group 
+                  axis="x" 
+                  values={filteredLocalScenes} 
+                  onReorder={(newOrder: Scene[]) => {
+                    if (!search.trim()) {
+                      const updatedScenes = [...scenes];
+                      const localIndices = scenes.map((s, i) => (s.groupId || 'default') === workspace.id ? i : -1).filter(i => i !== -1);
+                      newOrder.forEach((scene: Scene, idx: number) => {
+                        updatedScenes[localIndices[idx]] = scene;
+                      });
+                      saveScenes(updatedScenes);
+                    }
+                  }}
                   className="flex flex-row gap-6 w-max px-4"
                 >
                   {filteredLocalScenes.map((scene, i) => (
-                    <div key={scene.id} className="min-w-[350px] w-[350px] md:w-[400px] md:min-w-[400px] relative group flex-shrink-0">
-                      <SceneCard 
-                        scene={scene} 
-                        index={i}
-                        updateScene={updateScene} 
-                        deleteScene={deleteScene} 
-                        duplicateScene={duplicateScene}
-                        onTranslate={handleTranslate}
-                        isCarousel={true}
-                      />
-                    </div>
+                    <SceneCard 
+                      key={scene.id}
+                      scene={scene} 
+                      index={i}
+                      updateScene={updateScene} 
+                      deleteScene={deleteScene} 
+                      duplicateScene={duplicateScene}
+                      onTranslate={handleTranslate}
+                    />
                   ))}
-                </motion.div>
+                </Reorder.Group>
               </div>
           ) : (
             <WorkspaceSection 
