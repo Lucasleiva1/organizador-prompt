@@ -1,12 +1,15 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
-import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View } from "lucide-react";
+import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, FileDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
 import { WorkspaceSection } from "./WorkspaceSection";
 import { SceneCard } from "./SceneCard";
 import { AssetManager } from "../utils/AssetManager";
-
+import jsPDF from 'jspdf';
+import { documentDir, join } from '@tauri-apps/api/path';
+import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 interface WorkspaceInstanceProps {
   index: number;
   workspace: Workspace;
@@ -255,6 +258,129 @@ export const WorkspaceInstance = ({
     saveScenes(newScenes);
   }, [scenes, saveScenes, workspace.id, workspace.theme]);
 
+  const exportToPDF = async () => {
+    if (localScenes.length === 0) {
+      alert("No hay escenas para exportar.");
+      return;
+    }
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const title = workspace.name || "Sección Sin Nombre";
+      let yPos = 20;
+
+      // Header
+      doc.setFillColor(15, 23, 42); 
+      doc.rect(0, 0, 210, 35, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text(title.toUpperCase(), 105, 18, { align: 'center' });
+      
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("PROMPT STUDIO - PRODUCCIÓN FINAL", 105, 26, { align: 'center' });
+      
+      yPos = 45;
+
+      for (let i = 0; i < localScenes.length; i++) {
+        const scene = localScenes[i];
+        
+        const maxTextWidth = scene.asset ? 95 : 180;
+        doc.setFontSize(8);
+        const splitImage = doc.splitTextToSize(scene.imageText || "(Vacío)", maxTextWidth);
+        const splitVideo = doc.splitTextToSize(scene.videoText || "(Vacío)", maxTextWidth);
+        const textBlockHeight = 5 + (splitImage.length * 3.5) + 8 + (splitVideo.length * 3.5);
+        
+        const imageBlockHeight = scene.asset ? 45 : 0; 
+        const requiredSpace = 15 + Math.max(textBlockHeight, imageBlockHeight) + 5;
+
+        // Bottom margin check
+        if (yPos + requiredSpace > 285) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        // Outer box
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.1);
+        doc.rect(10, yPos, 190, requiredSpace);
+
+        // Header Scene
+        doc.setFillColor(10, 10, 10);
+        doc.rect(10, yPos, 190, 8, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text(`ESCENA #${i + 1} | ESTADO: ${scene.asset ? 'APROBADA' : 'BORRADOR'}`, 15, yPos + 5.5);
+
+        const contentY = yPos + 12;
+
+        if (scene.asset) {
+          try {
+             const imgUrl = await AssetManager.resolveAssetUrl(scene.asset);
+             const response = await fetch(imgUrl);
+             const blob = await response.blob();
+             const reader = new FileReader();
+             const base64Promise = new Promise<string>((resolve) => {
+               reader.onloadend = () => resolve(reader.result as string);
+               reader.readAsDataURL(blob);
+             });
+             const base64data = await base64Promise;
+             const format = scene.asset.toLowerCase().endsWith('.png') ? 'PNG' : 
+                            scene.asset.toLowerCase().endsWith('.webp') ? 'WEBP' : 'JPEG';
+             doc.addImage(base64data, format, 15, contentY, 80, 45);
+          } catch(e) {
+             console.warn("No se pudo cargar img", e);
+             doc.setTextColor(255, 0, 0);
+             doc.text("[Error cargando imagen]", 15, contentY + 5);
+          }
+        }
+
+        doc.setTextColor(30, 41, 59);
+        const textX = scene.asset ? 100 : 15;
+
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text("IMAGEN PROMPT:", textX, contentY + 2);
+        
+        doc.setFont("helvetica", "normal");
+        doc.text(splitImage, textX, contentY + 6);
+        
+        const videoY = contentY + 6 + (splitImage.length * 3.5) + 3;
+        doc.setFont("helvetica", "bold");
+        doc.text("VIDEO PROMPT:", textX, videoY);
+        
+        doc.setFont("helvetica", "normal");
+        doc.text(splitVideo, textX, videoY + 4);
+
+        yPos += requiredSpace + 5; 
+      }
+
+      const pdfOutput = doc.output('arraybuffer');
+      const sysDocPath = await documentDir();
+      const targetFolder = await join(sysDocPath, 'Prompt Studio', 'exportaciones');
+      await mkdir(targetFolder, { recursive: true });
+
+      const defaultPath = await join(targetFolder, `${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+      const fullPath = await saveDialog({
+        title: "Exportar Sección a PDF",
+        defaultPath: defaultPath,
+        filters: [{ name: "PDF", extensions: ["pdf"] }]
+      });
+
+      if (!fullPath) return; 
+      
+      await writeFile(fullPath, new Uint8Array(pdfOutput));
+      alert(`PDF exportado con éxito a:\n${fullPath}`);
+      
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      alert("Error al intentar exportar el PDF.");
+    }
+  };
+
   // Golden theme styling applied at boundary
   const containerClasses = workspace.theme === 'golden' 
     ? 'bg-amber-500/5 !border-amber-500/20 p-6 rounded-[2rem] border-[3px] border-dashed shadow-[0_0_50px_rgba(245,158,11,0.05)]' 
@@ -287,33 +413,34 @@ export const WorkspaceInstance = ({
     <div className={`grid grid-cols-1 lg:grid-cols-4 gap-6 mb-16 ${containerClasses}`} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
       
       {/* Section Header */}
-      <div className="col-span-1 lg:col-span-4 flex items-center justify-between mb-2 bg-slate-900/40 backdrop-blur-xl border border-white/5 p-4 rounded-3xl shadow-xl">
+      <div className="col-span-1 lg:col-span-4 flex items-center justify-between mb-2 bg-[#0a0a0a] border border-[#222] p-4 rounded-2xl shadow-xl">
         <div className="flex items-center gap-4">
-          <div className="px-5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
-            <span className="text-emerald-400 font-black tracking-tighter text-sm">SECCIÓN #{index + 1}</span>
+          <div className="px-5 py-2.5 bg-[#111] border border-[#333] rounded-xl flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+            <span className="text-emerald-500 font-semibold tracking-tighter text-sm">SECCIÓN #{index + 1}</span>
           </div>
-          <div className="h-8 w-px bg-white/10" />
+          <div className="h-8 w-px bg-[#222]" />
           <input 
             value={workspace.name || ""} 
             onChange={(e) => updateWorkspaceName(workspace.id, e.target.value)}
             placeholder="Nombre de la sección (opcional)..."
-            className="bg-transparent border-none outline-none text-slate-300 font-black text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
+            className="bg-transparent border-none outline-none text-slate-300 font-semibold text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
           />
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
           {/* View Mode Switcher */}
-          <div className="flex items-center bg-slate-950/40 p-1 rounded-2xl border border-white/5 mr-2">
+          <div className="flex items-center bg-black p-1 rounded-xl border border-[#222] mr-2">
             <button 
               onClick={() => setViewMode('grid')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[#222] text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
               title="Vista Rejilla"
             >
               <LayoutGrid size={18} />
             </button>
             <button 
               onClick={() => setViewMode('vertical')}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'vertical' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === 'vertical' ? 'bg-[#222] text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
               title="Vista Vertical"
             >
               <LayoutList size={18} />
@@ -322,7 +449,7 @@ export const WorkspaceInstance = ({
               onClick={() => {
                 setViewMode('carousel');
               }}
-              className={`p-2.5 rounded-xl transition-all ${viewMode === 'carousel' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === 'carousel' ? 'bg-[#222] text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
               title="Vista Enfoque (Carrusel)"
             >
               <View size={18} />
@@ -330,19 +457,25 @@ export const WorkspaceInstance = ({
           </div>
           <button
             onClick={() => setIsCollapsed(true)}
-            className="p-3 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-2xl transition-all flex items-center gap-2 group"
+            className="p-2.5 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-all flex items-center justify-center"
             title="Colapsar sección"
           >
-            <span className="text-[10px] font-black opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest">Colapsar</span>
             <ChevronDown size={18} />
           </button>
           <button 
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-3 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all flex items-center gap-2 group"
+            className="p-2.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all flex items-center justify-center"
             title="Eliminar Sección"
           >
-            <span className="text-[10px] font-black opacity-0 group-hover:opacity-100 transition-all uppercase tracking-widest">Eliminar</span>
             <Trash2 size={18} />
+          </button>
+          <div className="w-px h-5 bg-[#333] mx-1" />
+          <button 
+            onClick={exportToPDF}
+            className="p-2.5 text-[#D4AF37]/60 hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-xl transition-all flex items-center justify-center border border-transparent hover:border-[#D4AF37]/20"
+            title="Exportar Escenas a PDF"
+          >
+            <FileDown size={18} />
           </button>
         </div>
       </div>
@@ -362,12 +495,12 @@ export const WorkspaceInstance = ({
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-slate-900 border border-white/10 p-10 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] max-w-md w-full text-center"
+              className="relative bg-[#111] border border-[#222] p-10 rounded-3xl shadow-2xl max-w-md w-full text-center"
             >
-              <div className="w-20 h-20 bg-red-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
+              <div className="w-20 h-20 bg-[#1a1a1a] rounded-2xl flex items-center justify-center mx-auto mb-8 border border-[#333]">
                 <Trash2 className="text-red-500" size={32} />
               </div>
-              <h3 className="text-2xl font-black text-white mb-3 tracking-tighter">¿ELIMINAR ESTA SECCIÓN?</h3>
+              <h3 className="text-2xl font-bold text-white mb-3 tracking-tighter">¿ELIMINAR ESTA SECCIÓN?</h3>
               <p className="text-slate-400 text-sm mb-10 font-medium leading-relaxed">
                 Se borrarán todas las escenas asociadas. Esta acción no se puede deshacer.
               </p>
@@ -397,43 +530,43 @@ export const WorkspaceInstance = ({
       <aside className="lg:sticky lg:top-32 h-fit space-y-5">
         
         {workspace.theme === 'golden' && (
-          <h3 className="text-amber-400 font-black tracking-[0.2em] text-sm mb-4 flex items-center gap-2">
+          <h3 className="text-amber-500 font-bold tracking-[0.2em] text-sm mb-4 flex items-center gap-2">
             <Sparkles size={16} /> SECCIÓN ESPECIAL DORADA
           </h3>
         )}
 
-        <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl p-5 border-2 border-amber-500/20">
-          <h2 className="text-xs font-black mb-3 flex items-center gap-3 text-amber-400">
+        <div className={`bg-[#0a0a0a] rounded-2xl p-5 border ${workspace.theme === 'golden' ? 'border-amber-500/20' : 'border-[#222]'}`}>
+          <h2 className="text-xs font-bold mb-3 flex items-center gap-3 text-slate-300">
             <FileText size={16} /> IMPORTAR MARKDOWN
           </h2>
           <p className="text-[10px] text-slate-500 mb-3">Las escenas importadas aquí pertenecen solo a esta sección.</p>
           <div className="flex flex-col gap-2 mb-3">
-            <h3 className="text-[9px] font-bold text-emerald-400 mb-1 flex items-center gap-1"><ImageIcon size={10}/> LISTA / TABLA IMÁGENES</h3>
+            <h3 className="text-[9px] font-bold text-slate-500 mb-1 flex items-center gap-1"><ImageIcon size={10}/> LISTA / TABLA IMÁGENES</h3>
             <textarea
-              className="w-full h-20 bg-slate-950/40 rounded-xl p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-emerald-500/20 focus:ring-1 focus:ring-emerald-500/20 transition-all resize-none font-mono text-[10px]"
+              className="w-full h-20 bg-black rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-[#222] focus:border-[#444] transition-all resize-none font-mono text-[10px]"
               placeholder="Pega texto..."
               value={imageMarkdown}
               onChange={(e) => setImageMarkdown(e.target.value)}
             />
             <button 
               onClick={() => addPromptsToScenes(imageMarkdown, 'image')} 
-              className="w-full py-2 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 shadow-lg transition-all"
+              className="w-full py-2 rounded-lg font-bold text-[10px] tracking-[0.2em] uppercase text-slate-400 bg-[#111] hover:bg-[#222] hover:text-slate-300 border border-[#222] transition-all"
             >
               + AGREGAR IMÁGENES
             </button>
           </div>
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-[9px] font-bold text-violet-400 mb-1 flex items-center gap-1"><Clapperboard size={10}/> LISTA / TABLA VIDEOS</h3>
+            <h3 className="text-[9px] font-bold text-slate-500 mb-1 flex items-center gap-1"><Clapperboard size={10}/> LISTA / TABLA VIDEOS</h3>
             <textarea
-              className="w-full h-20 bg-slate-950/40 rounded-xl p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-violet-500/20 focus:ring-1 focus:ring-violet-500/20 transition-all resize-none font-mono text-[10px]"
+              className="w-full h-20 bg-black rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-[#222] focus:border-[#444] transition-all resize-none font-mono text-[10px]"
               placeholder="Pega texto..."
               value={videoMarkdown}
               onChange={(e) => setVideoMarkdown(e.target.value)}
             />
             <button 
               onClick={() => addPromptsToScenes(videoMarkdown, 'video')} 
-              className="w-full py-2 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase text-violet-400 bg-violet-500/10 hover:bg-violet-500/20 shadow-lg transition-all"
+              className="w-full py-2 rounded-lg font-bold text-[10px] tracking-[0.2em] uppercase text-slate-400 bg-[#111] hover:bg-[#222] hover:text-slate-300 border border-[#222] transition-all"
             >
               + AGREGAR VIDEOS
             </button>
@@ -441,23 +574,23 @@ export const WorkspaceInstance = ({
         </div>
 
         {/* Stats */}
-        <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl p-5 border border-white/5">
-          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-            <Hash size={12} /> ESTADÍSTICAS LOCALES
+        <div className="bg-[#0a0a0a] rounded-2xl p-5 border border-[#222]">
+          <h3 className="text-[10px] font-bold text-slate-500 md:text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
+            <Hash size={12} /> ESTADÍSTICAS
           </h3>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-3 text-center">
-              <div className="text-xl font-black text-emerald-400">{filteredLocalScenes.filter(s => s.imageText.trim()).length}</div>
-              <div className="text-[9px] text-emerald-400/50 font-bold uppercase tracking-wider">Imágenes</div>
+            <div className="bg-[#0f0f0f] border border-[#222] rounded-xl p-3 text-center">
+              <div className="text-xl font-semibold text-slate-300">{filteredLocalScenes.filter(s => s.imageText.trim()).length}</div>
+              <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider mt-1">Imágenes</div>
             </div>
-            <div className="bg-violet-500/5 border border-violet-500/10 rounded-xl p-3 text-center">
-              <div className="text-xl font-black text-violet-400">{filteredLocalScenes.filter(s => s.videoText.trim()).length}</div>
-              <div className="text-[9px] text-violet-400/50 font-bold uppercase tracking-wider">Videos</div>
+            <div className="bg-[#0f0f0f] border border-[#222] rounded-xl p-3 text-center">
+              <div className="text-xl font-semibold text-slate-300">{filteredLocalScenes.filter(s => s.videoText.trim()).length}</div>
+              <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider mt-1">Videos</div>
             </div>
           </div>
-          <div className="mt-3 text-center">
-            <div className="text-sm font-black text-slate-300">{filteredLocalScenes.length}</div>
-            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Total Escenas</div>
+          <div className="mt-4 text-center border-t border-[#222] pt-4">
+            <div className="text-sm font-semibold text-slate-300">{filteredLocalScenes.length}</div>
+            <div className="text-[9px] text-slate-500 font-semibold uppercase tracking-wider">Total Escenas</div>
           </div>
         </div>
       </aside>
@@ -470,12 +603,12 @@ export const WorkspaceInstance = ({
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }} 
               exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center justify-center h-[500px] rounded-[3rem] border-2 border-dashed border-white/5 bg-slate-900/20 backdrop-blur-sm"
+              className="flex flex-col items-center justify-center h-[500px] rounded-3xl border border-[#222] bg-[#0a0a0a]"
             >
-              <div className="w-20 h-20 rounded-2xl bg-slate-800/40 flex items-center justify-center mb-6 shadow-2xl">
-                <Plus className="text-slate-600 animate-pulse" size={36} />
+              <div className="w-20 h-20 rounded-2xl bg-[#131313] flex items-center justify-center mb-6 border border-[#222]">
+                <Plus className="text-slate-600" size={36} />
               </div>
-              <h3 className="text-xl font-black text-slate-300 mb-2 tracking-tight">Comienza la magia</h3>
+              <h3 className="text-xl font-bold text-slate-300 mb-2 tracking-tight">Comienza la magia</h3>
               <p className="text-slate-500 text-sm font-medium mb-6">Pega texto o arrastra imágenes</p>
               <div className="flex gap-3">
                 <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all">

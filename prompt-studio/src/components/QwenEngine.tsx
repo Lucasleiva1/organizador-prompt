@@ -270,6 +270,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
         }
         await new Promise(r => setTimeout(r, 400));
       }
+      setIsModalOpen(false);
     } catch (globalError) {
       console.error("ERROR CRÍTICO EN PROCESO:", globalError);
       alert("Error inesperado en el motor. Por favor revisa la consola.");
@@ -509,48 +510,47 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
         {/* HEADER SECTION */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 border-b border-white/10 pb-8 gap-6">
           <div className="flex flex-col gap-1">
-            <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tighter italic flex items-center gap-4 uppercase">
+            <h1 className="text-3xl lg:text-4xl font-extrabold text-white tracking-tighter italic flex items-center gap-4 uppercase">
               <div className="relative">
                 <BrainCircuit className="text-violet-500" size={36} />
-                <div className="absolute -inset-2 bg-violet-500/20 blur-xl rounded-full animate-pulse" />
               </div>
               Storyboard IA
             </h1>
-            <p className="text-slate-500 text-[10px] font-black tracking-[0.3em] uppercase ml-14">Orquestador de Guiones Visuales</p>
+            <p className="text-slate-500 text-[10px] font-bold tracking-[0.3em] uppercase ml-14">Orquestador de Guiones Visuales</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 bg-slate-900/50 p-2.5 rounded-[2rem] border border-white/5 backdrop-blur-md">
+          <div className="flex flex-wrap items-center gap-4 bg-[#0a0a0a] p-2.5 rounded-2xl border border-[#222]">
             {/* Proyecto Selector */}
-            <div className="flex flex-col px-4 border-r border-white/10">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Proyecto Activo</span>
+            <div className="flex flex-col px-4 border-r border-[#333]">
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Proyecto Activo</span>
               <input 
                 type="text" 
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                className="bg-transparent text-white font-bold text-sm outline-none border-none focus:ring-0 transition-colors w-32"
+                className="bg-transparent text-white font-semibold text-sm outline-none border-none focus:ring-0 transition-colors w-32"
                 placeholder="PROYECTO_ALPHA"
               />
             </div>
 
             {/* View Mode Selectors */}
-            <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+            <div className="flex items-center gap-1 bg-black p-1 rounded border border-[#222]">
               <button 
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`p-2 rounded-sm transition-all ${viewMode === 'grid' ? 'bg-[#222] text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
                 title="Vista en Rejilla"
               >
                 <LayoutGrid size={16} />
               </button>
               <button 
                 onClick={() => setViewMode('vertical')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'vertical' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`p-2 rounded-sm transition-all ${viewMode === 'vertical' ? 'bg-[#222] text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
                 title="Vista Vertical"
               >
                 <LayoutList size={16} />
               </button>
               <button 
                 onClick={() => setViewMode('carousel')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'carousel' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`p-2 rounded-sm transition-all ${viewMode === 'carousel' ? 'bg-[#222] text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
                 title="Vista Carrusel"
               >
                 <View size={16} />
@@ -561,34 +561,41 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             <div className="flex items-center gap-2">
               <button 
                 onClick={scanProjectImages}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all border border-white/5 group/refresh"
+                className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] text-slate-300 px-4 py-2.5 rounded font-bold transition-all border border-[#333] group/refresh"
                 title="Escanear archivos locales"
               >
                 <ImagePlus size={16} className="group-hover/refresh:rotate-12 transition-transform" />
-                <span className="text-[10px] uppercase font-black tracking-widest hidden sm:block">Escanear</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest hidden sm:block">Escanear</span>
                 {lastScanCount !== null && (
-                  <span className="bg-emerald-500 text-[8px] px-1.5 py-0.5 rounded-full border border-slate-900 ml-1">
+                  <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-sm border border-emerald-500/30 ml-1">
                     {lastScanCount}
                   </span>
                 )}
               </button>
               <button 
                 onClick={openProjectFolder}
-                className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all border border-white/5"
+                className="p-2.5 bg-[#1a1a1a] hover:bg-[#222] text-slate-400 hover:text-white rounded transition-all border border-[#333]"
                 title="Abrir carpeta raíz"
               >
                 <FolderOpen size={18} />
               </button>
             </div>
 
-            <div className="w-px h-8 bg-white/10 mx-1" />
-
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-violet-900/30 group/new"
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-6 py-2.5 rounded font-bold transition-all group/new border border-violet-400/20"
             >
               <Plus size={18} className="group-hover/new:rotate-90 transition-transform duration-300" />
-              <span className="text-[10px] uppercase font-black tracking-widest">Nuevo Guion</span>
+              <span className="text-[10px] uppercase font-bold tracking-widest">Nuevo Guion</span>
+            </button>
+
+            <button 
+              onClick={exportToPDF}
+              disabled={panels.length === 0 || isProcessing}
+              className="flex items-center gap-2 bg-[#222] border border-[#333] hover:bg-[#333] hover:text-emerald-400 disabled:bg-[#111] disabled:text-slate-600 text-slate-300 px-6 py-2.5 rounded font-bold transition-all group/export cursor-pointer disabled:cursor-not-allowed"
+            >
+              <FileDown size={18} className="group-hover/export:-translate-y-0.5 transition-transform duration-300" />
+              <span className="text-[10px] uppercase font-bold tracking-widest">Exportar PDF</span>
             </button>
           </div>
         </div>
@@ -681,27 +688,6 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               </div>
             )}
 
-            {/* GLOBAL EXPORT BUTTONS (When panels exist) */}
-            <div className="fixed bottom-8 right-8 flex items-center gap-3 z-50">
-              <button 
-                onClick={() => {
-                  const text = JSON.stringify(panels, null, 2);
-                  navigator.clipboard.writeText(text);
-                  alert("¡JSON copiado con éxito!");
-                }}
-                className="bg-slate-900/90 backdrop-blur-xl border border-white/10 text-slate-400 p-4 rounded-2xl hover:text-white transition-all shadow-2xl"
-                title="Copiar JSON"
-              >
-                <Copy size={20} />
-              </button>
-              <button 
-                onClick={exportToPDF}
-                className="flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-4 rounded-2xl font-black text-xs tracking-widest shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all uppercase"
-              >
-                <FileDown size={20} /> Exportar PDF
-              </button>
-            </div>
-
           </div>
         )}
       </div>
@@ -722,23 +708,23 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               initial={{ opacity: 0, scale: 0.9, y: 40 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 40 }}
-              className="relative w-full max-w-4xl bg-slate-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] flex flex-col"
+              className="relative w-full max-w-4xl bg-[#111] border border-[#222] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
             >
               {/* Modal Header */}
-              <div className="flex justify-between items-center p-8 border-b border-white/5 bg-white/5">
+              <div className="flex justify-between items-center p-8 border-b border-[#222] bg-[#0a0a0a]">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-violet-600 rounded-2xl shadow-lg shadow-violet-900/40">
-                    <BrainCircuit size={24} className="text-white" />
+                  <div className="p-3 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-none">
+                    <BrainCircuit size={24} className="text-violet-400" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-black text-white tracking-tight uppercase italic">Nuevo Storyboard</h2>
+                    <h2 className="text-xl font-bold text-white tracking-tight uppercase italic">Nuevo Storyboard</h2>
                     <p className="text-slate-500 text-[10px] font-bold tracking-widest uppercase">Procesador de Inteligencia Artificial</p>
                   </div>
                 </div>
                 {!isProcessing && (
                   <button 
                     onClick={() => setIsModalOpen(false)}
-                    className="p-3 bg-slate-800 hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-2xl transition-all"
+                    className="p-3 bg-[#1a1a1a] border border-[#222] hover:bg-red-500/10 text-slate-500 hover:text-red-400 rounded-xl transition-all"
                   >
                     <X size={20} />
                   </button>
@@ -748,10 +734,9 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               {/* Modal Body */}
               <div className="p-8 flex flex-col gap-6">
                 <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 to-emerald-600 rounded-3xl blur opacity-10 group-focus-within:opacity-30 transition duration-1000"></div>
                   <textarea 
                     autoFocus
-                    className="relative w-full h-80 bg-black/40 border border-white/10 rounded-2xl p-8 text-slate-200 text-lg focus:ring-2 focus:ring-violet-500/50 outline-none backdrop-blur-xl resize-none custom-scrollbar"
+                    className="relative w-full h-80 bg-black border border-[#222] focus:border-[#444] rounded-xl p-8 text-slate-300 text-lg outline-none backdrop-blur-none resize-none custom-scrollbar transition-colors"
                     placeholder="Escribe o pega tu guion aquí... Qwen se encargará del resto."
                     value={script}
                     onChange={(e) => setScript(e.target.value)}
@@ -766,7 +751,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                       
                       {progress.total > 0 && (
                         <div className="w-full max-w-xs space-y-2">
-                          <div className="flex justify-between text-[10px] font-black text-violet-400 uppercase tracking-widest">
+                          <div className="flex justify-between text-[10px] font-bold text-violet-400 uppercase tracking-widest">
                             <span>Panel {progress.current} de {progress.total}</span>
                             <span>{Math.round((progress.current / progress.total) * 100)}%</span>
                           </div>
@@ -786,11 +771,11 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               </div>
 
               {/* Modal Footer */}
-              <div className="p-8 bg-black/40 border-t border-white/5 flex items-center justify-between">
+              <div className="p-8 bg-[#0a0a0a] border-t border-[#222] flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={() => setScript("")}
-                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                    className="px-6 py-3 bg-[#1a1a1a] border border-[#333] hover:bg-[#222] text-slate-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
                   >
                     Limpiar
                   </button>
@@ -800,7 +785,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                   <button 
                     onClick={handleAddToWorkspace}
                     disabled={panels.length === 0 || isProcessing}
-                    className="px-6 py-4 bg-white text-black hover:bg-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest transition-all disabled:opacity-30 flex items-center gap-2"
+                    className="px-6 py-4 bg-white text-black hover:bg-slate-200 rounded-xl font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-30 border border-white flex items-center gap-2"
                   >
                     <Plus size={16} /> Añadir al Workspace
                   </button>
@@ -810,7 +795,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
                       if (panels.length > 0) setIsModalOpen(false);
                     }}
                     disabled={!script.trim() || isProcessing}
-                    className="px-8 py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-violet-900/40 transition-all disabled:opacity-50 flex items-center gap-3"
+                    className="px-8 py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-3 shadow-none border border-violet-500/50"
                   >
                     <BrainCircuit size={18} /> Procesar Guion
                   </button>
@@ -828,7 +813,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 // COMPONENT HELPERS
 const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError, isVertical, isCarousel }: any) => {
   return (
-    <div className={`flex flex-col bg-slate-900/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl hover:border-violet-500/40 transition-all duration-300 group ${isVertical ? 'flex-row min-h-[300px]' : 'h-full w-full'}`}>
+    <div className={`flex flex-col bg-[#0a0a0a] rounded-2xl border border-[#222] overflow-hidden shadow-xl hover:border-violet-500/30 transition-all duration-300 group ${isVertical ? 'flex-row min-h-[300px]' : 'h-full w-full'}`}>
       
       {/* Image Area */}
       <div className={`relative bg-black group-hover:bg-slate-950 transition-colors ${isVertical ? 'w-1/3' : 'aspect-video'} ${isCarousel ? 'h-[350px]' : ''}`}>
@@ -842,10 +827,10 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
             />
           ) : (
             <>
-              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+              <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.2) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
               <div className="flex flex-col items-center gap-3 opacity-20 group-hover:opacity-40 transition-opacity">
                 <ImagePlus size={48} className="text-white" />
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Sin Arte</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white">Sin Arte</span>
               </div>
             </>
           )}
@@ -856,11 +841,11 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
           <motion.span 
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            className="bg-violet-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-2xl uppercase tracking-widest"
+            className="bg-[#222] text-violet-400 border border-[#333] text-[10px] font-bold px-4 py-1.5 rounded-full shadow-lg uppercase tracking-widest"
           >
             Escena {panel.scene}
           </motion.span>
-          <span className="bg-black/60 backdrop-blur-md text-white/50 text-[9px] font-black px-4 py-1.5 rounded-full border border-white/5 uppercase tracking-widest">
+          <span className="bg-black/80 backdrop-blur-md text-white/50 text-[9px] font-bold px-4 py-1.5 rounded-full border border-white/5 uppercase tracking-widest">
             Shot {index + 1}
           </span>
         </div>
@@ -869,7 +854,7 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
         <div className="absolute top-6 right-6 flex items-center gap-2 z-10 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
           <button 
             onClick={() => onUpload(panel.scene)}
-            className="p-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-2xl shadow-2xl transition-all"
+            className="p-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl shadow-lg transition-all"
             title="Actualizar imagen"
           >
             <ImagePlus size={18} />
@@ -877,7 +862,7 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
           {image && (
             <button 
               onClick={() => onRemove(panel.scene)}
-              className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl shadow-2xl transition-all"
+              className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-lg transition-all"
               title="Borrar imagen"
             >
               <Trash2 size={18} />
@@ -897,7 +882,7 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
       <div className={`p-8 flex flex-col gap-6 flex-1 ${isVertical ? 'w-2/3 justify-center' : ''}`}>
         <div className="flex flex-col gap-2 flex-grow group/field">
           <div className="flex justify-between items-center flex-shrink-0">
-            <span className="text-[10px] font-black text-violet-400/70 uppercase tracking-[0.2em]">Acción / Prompt</span>
+            <span className="text-[10px] font-bold text-violet-400/80 uppercase tracking-[0.2em]">Acción / Prompt</span>
             <button 
               onClick={() => {
                 navigator.clipboard.writeText(panel.description);
@@ -909,28 +894,28 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
             </button>
           </div>
           <div className="pb-2">
-            <p className="text-slate-200 text-sm leading-relaxed font-bold italic font-serif">
+            <p className="text-slate-300 text-sm leading-relaxed font-medium italic font-serif">
               "{panel.description}"
             </p>
           </div>
         </div>
 
         <div className="flex flex-col gap-3 flex-shrink-0 mt-auto">
-          <div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 flex flex-col">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Cámara</span>
+          <div className="bg-[#111] px-4 py-3 rounded-xl border border-[#333] flex flex-col">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Cámara</span>
             <div>
               <span className="text-violet-300 font-mono text-[10px] leading-relaxed">{panel.optics || "N/A"}</span>
             </div>
           </div>
-          <div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 flex flex-col">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Física</span>
+          <div className="bg-[#111] px-4 py-3 rounded-xl border border-[#333] flex flex-col">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Física</span>
             <div>
               <span className="text-emerald-400 font-mono text-[10px] leading-relaxed">{panel.physics || "Standard"}</span>
             </div>
           </div>
           {isVertical && (
-            <div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 flex flex-col">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Tiempo</span>
+            <div className="bg-[#111] px-4 py-3 rounded-xl border border-[#333] flex flex-col">
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Tiempo</span>
               <div>
                 <span className="text-amber-500 font-mono text-[10px] leading-relaxed">{panel.timing || "3s"}</span>
               </div>
@@ -945,11 +930,11 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
 const AddNewSlot = ({ onClick, isVertical }: any) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center justify-center p-12 bg-slate-900/20 border-2 border-dashed border-white/5 rounded-[3rem] opacity-30 hover:opacity-100 hover:bg-violet-600/5 hover:border-violet-500/20 transition-all group ${isVertical ? 'w-full min-h-[300px]' : ''}`}
+    className={`flex flex-col items-center justify-center p-12 bg-[#050505] border-2 border-dashed border-[#222] rounded-3xl opacity-50 hover:opacity-100 hover:bg-[#111] hover:border-violet-400/20 transition-all group ${isVertical ? 'w-full min-h-[300px]' : ''}`}
   >
-    <div className="p-6 bg-slate-800/40 rounded-full mb-6 group-hover:scale-110 group-hover:bg-violet-600 transition-all duration-500 shadow-2xl">
-      <Plus size={40} className="text-slate-600 group-hover:text-white transition-colors" />
+    <div className="p-6 bg-[#1a1a1a] border border-[#333] rounded-2xl mb-6 group-hover:scale-110 group-hover:border-violet-500/50 transition-all duration-500 shadow-none">
+      <Plus size={40} className="text-slate-600 group-hover:text-violet-400 transition-colors" />
     </div>
-    <span className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] group-hover:text-violet-400 transition-colors">Generar Nuevo Panel</span>
+    <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.3em] group-hover:text-violet-400 transition-colors">Generar Nuevo Panel</span>
   </button>
 );

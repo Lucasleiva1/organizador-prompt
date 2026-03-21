@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Moon, Monitor, Sun, Plus, Sparkles, Trash2, Save, FolderOpen } from "lucide-react";
+import { Moon, Monitor, Sun, Plus, Sparkles, Trash2, Save, FolderOpen, Film } from "lucide-react";
 import { load } from "@tauri-apps/plugin-store";
 import { save as saveDialog, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -220,7 +220,7 @@ const useScriptStore = () => {
 const NavButton = ({ icon: Icon, label, onClick, color }: any) => {
   const styles: any = { emerald: "text-emerald-400 hover:bg-emerald-500/10", red: "text-red-400 hover:bg-red-500/10", default: "text-slate-400 hover:bg-white/5" };
   return (
-    <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded-xl font-bold text-xs transition-all ${styles[color] || styles.default}`}><Icon size={15} /> {label}</button>
+    <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded font-bold text-xs transition-all border border-transparent hover:border-white/5 ${styles[color] || styles.default}`}><Icon size={15} /> {label}</button>
   );
 };
 
@@ -366,22 +366,19 @@ export default function App() {
 
   if (loadingScenes || loadingWorkspaces || loadingScripts || !workspacesInitialized) {
     return (
-      <div className={`theme-${theme} min-h-screen bg-[#020617] flex items-center justify-center`}>
+      <div className={`theme-${theme} min-h-screen bg-[#030303] flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-6"><div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" /><div className="text-emerald-400 font-black tracking-[0.3em] text-sm animate-pulse">PROMPT STUDIO</div></div>
       </div>
     );
   }
 
   return (
-    <div className={`theme-${theme} min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-emerald-500/30 overflow-x-hidden`}>
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-500/5 blur-[120px] rounded-full" />
-      </div>
+    <div className={`theme-${theme} min-h-screen bg-[#030303] text-slate-200 font-sans selection:bg-emerald-500/30 overflow-x-hidden`}>
+
 
       <nav className="sticky top-0 z-[60] p-4 lg:p-6">
-        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center gap-3 bg-slate-900/40 backdrop-blur-2xl border border-white/5 p-3 lg:p-4 rounded-[2rem] shadow-2xl">
-          <div className="flex items-center gap-3 px-3 mr-2 border-r border-white/5">
+        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center gap-3 bg-[#0a0a0a] border border-[#222] p-3 lg:p-4 rounded-3xl shadow-2xl">
+          <div className="flex items-center gap-3 px-3 mr-2 border-r border-[#222]">
             <div className="w-9 h-9 bg-gradient-to-tr from-emerald-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20"><Sparkles className="text-white" size={18} /></div>
             <h1 className="text-base font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 hidden lg:block">PROMPT STUDIO</h1>
    
@@ -394,7 +391,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsScriptManagerOpen(!isScriptManagerOpen)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${isScriptManagerOpen ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "bg-slate-800/40 text-slate-400 hover:bg-white/5 border border-white/5"}`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded font-bold text-xs transition-all ${isScriptManagerOpen ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "bg-slate-800/40 text-slate-400 hover:bg-white/5 border border-white/5"}`}
             >
               <div className={`w-2 h-2 rounded-full mr-1 transition-all ${isScriptManagerOpen ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-500"}`} />
               GUIONES
@@ -408,22 +405,22 @@ export default function App() {
                 saveScenes([]); 
               }
             }} color="red" />
-            <div className="flex items-center bg-slate-800/60 p-1 rounded-xl border border-white/5">
-              <button onClick={() => setTheme('dark')} className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Moon size={14}/></button>
-              <button onClick={() => setTheme('inter')} className={`p-1.5 rounded-lg transition-all ${theme === 'inter' ? 'bg-slate-700 text-cyan-300 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Monitor size={14}/></button>
-              <button onClick={() => setTheme('light')} className={`p-1.5 rounded-lg transition-all ${theme === 'light' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Sun size={14}/></button>
+            <div className="flex items-center bg-slate-800/60 p-1 rounded border border-white/5">
+              <button onClick={() => setTheme('dark')} className={`p-1.5 rounded-sm transition-all ${theme === 'dark' ? 'bg-black text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Moon size={14}/></button>
+              <button onClick={() => setTheme('inter')} className={`p-1.5 rounded-sm transition-all ${theme === 'inter' ? 'bg-slate-700 text-cyan-300 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Monitor size={14}/></button>
+              <button onClick={() => setTheme('light')} className={`p-1.5 rounded-sm transition-all ${theme === 'light' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}><Sun size={14}/></button>
             </div>
 
             <button
               onClick={saveProject}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/15 hover:border-emerald-400/60 hover:shadow-[0_0_18px_rgba(52,211,153,0.35)] hover:text-emerald-300"
+              className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/15 hover:border-emerald-400/60 hover:shadow-[0_0_18px_rgba(52,211,153,0.35)] hover:text-emerald-300"
               title="Guardar proyecto como archivo JSON"
             >
               <Save size={13} /> GUARDAR
             </button>
             <button
               onClick={loadProject}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/40 border border-violet-500/20 text-violet-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/15 hover:border-violet-400/60 hover:shadow-[0_0_18px_rgba(167,139,250,0.35)] hover:text-violet-300"
+              className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-violet-500/20 text-violet-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/15 hover:border-violet-400/60 hover:shadow-[0_0_18px_rgba(167,139,250,0.35)] hover:text-violet-300"
               title="Cargar proyecto desde archivo JSON"
             >
               <FolderOpen size={13} /> CARGAR
@@ -447,6 +444,23 @@ export default function App() {
 
       {/* Main Workspaces Container */}
       <div className="max-w-[1600px] mx-auto px-4 lg:px-6 pb-20 mt-8">
+        
+        {/* PRODUCCION FINAL HEADER */}
+        {workspaces.length > 0 && (
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 border-b border-white/10 pb-8 gap-6 mt-16">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tighter italic flex items-center gap-4 uppercase">
+                <div className="relative">
+                  <Film className="text-emerald-500" size={36} />
+                  <div className="absolute -inset-2 bg-emerald-500/20 blur-xl rounded-full animate-pulse" />
+                </div>
+                Producción Final
+              </h1>
+              <p className="text-slate-500 text-[10px] font-black tracking-[0.3em] uppercase ml-14">Generación de Assets y Renderizado</p>
+            </div>
+          </div>
+        )}
+
         {workspaces.map((ws, idx) => (
           <WorkspaceInstance
             key={ws.id}
