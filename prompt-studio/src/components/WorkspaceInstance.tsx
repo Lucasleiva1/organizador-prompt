@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
-import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, ChevronLeft } from "lucide-react";
+import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
@@ -41,7 +41,21 @@ export const WorkspaceInstance = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
-  const [carouselIndex, setCarouselIndex] = useState(0);
+  
+  // Reference for Framer Motion drag constraints
+  const carouselOuterRef = useRef<HTMLDivElement>(null);
+  const carouselInnerRef = useRef<HTMLDivElement>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
+
+  useEffect(() => {
+    if (carouselOuterRef.current && carouselInnerRef.current && viewMode === 'carousel') {
+      // Calculate how far left we can drag by subtracting outer container width from the inner content width
+      const width = carouselInnerRef.current.scrollWidth - carouselOuterRef.current.offsetWidth;
+      setCarouselWidth(width > 0 ? width : 0);
+    }
+  }, [scenes, search, viewMode]);
+
+
 
   // Filter global scenes to just this workspace
   const localScenes = useMemo(() => scenes.filter(s => (s.groupId || 'default') === workspace.id), [scenes, workspace.id]);
@@ -57,14 +71,6 @@ export const WorkspaceInstance = ({
     );
   }, [localScenes, search]);
 
-  // Clamp carousel index if scenes change
-  useEffect(() => {
-    if (carouselIndex >= filteredLocalScenes.length && filteredLocalScenes.length > 0) {
-      setCarouselIndex(filteredLocalScenes.length - 1);
-    } else if (filteredLocalScenes.length === 0 && carouselIndex !== 0) {
-      setCarouselIndex(0);
-    }
-  }, [filteredLocalScenes.length, carouselIndex]);
 
   const addPromptsToScenes = (rawText: string, mode: 'image' | 'video') => {
     if (!rawText.trim()) return;
@@ -315,7 +321,6 @@ export const WorkspaceInstance = ({
             <button 
               onClick={() => {
                 setViewMode('carousel');
-                setCarouselIndex(0);
               }}
               className={`p-2.5 rounded-xl transition-all ${viewMode === 'carousel' ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-slate-500 hover:text-slate-300'}`}
               title="Vista Enfoque (Carrusel)"
@@ -482,64 +487,32 @@ export const WorkspaceInstance = ({
               </div>
             </motion.div>
           ) : viewMode === 'carousel' ? (
-            <div className="relative group">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={filteredLocalScenes[carouselIndex]?.id}
-                  initial={{ opacity: 0, scale: 0.95, x: 20 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, x: -20 }}
-                  className="w-full"
+              <div 
+                ref={carouselOuterRef} 
+                className="w-full h-[500px] overflow-hidden cursor-grab active:cursor-grabbing pb-8 pt-4 px-2"
+              >
+                <motion.div 
+                  ref={carouselInnerRef}
+                  drag="x"
+                  dragConstraints={{ right: 0, left: -carouselWidth }}
+                  dragElastic={0.05}
+                  className="flex flex-row gap-6 w-max px-4"
                 >
-                  {filteredLocalScenes[carouselIndex] ? (
-                    <SceneCard 
-                      scene={filteredLocalScenes[carouselIndex]} 
-                      index={carouselIndex} 
-                      updateScene={updateScene} 
-                      deleteScene={deleteScene} 
-                      duplicateScene={duplicateScene}
-                      onTranslate={handleTranslate}
-                      isCarousel={true}
-                    />
-                  ) : (
-                    <div className="h-[400px] flex items-center justify-center text-slate-500 font-bold uppercase tracking-widest bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-white/5">
-                      Cargando escena...
+                  {filteredLocalScenes.map((scene, i) => (
+                    <div key={scene.id} className="min-w-[350px] w-[350px] md:w-[400px] md:min-w-[400px] relative group flex-shrink-0">
+                      <SceneCard 
+                        scene={scene} 
+                        index={i}
+                        updateScene={updateScene} 
+                        deleteScene={deleteScene} 
+                        duplicateScene={duplicateScene}
+                        onTranslate={handleTranslate}
+                        isCarousel={true}
+                      />
                     </div>
-                  )}
+                  ))}
                 </motion.div>
-              </AnimatePresence>
-
-              {/* Carousel Controls */}
-              <div className="absolute top-1/2 -left-6 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => setCarouselIndex(prev => Math.max(0, prev - 1))}
-                  disabled={carouselIndex === 0}
-                  className="p-4 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-full text-white shadow-2xl hover:bg-violet-600 transition-all disabled:opacity-20"
-                >
-                  <ChevronLeft size={24} />
-                </button>
               </div>
-              <div className="absolute top-1/2 -right-6 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => setCarouselIndex(prev => Math.min(filteredLocalScenes.length - 1, prev + 1))}
-                  disabled={carouselIndex === filteredLocalScenes.length - 1}
-                  className="p-4 bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-full text-white shadow-2xl hover:bg-violet-600 transition-all disabled:opacity-20"
-                >
-                  <ChevronRight size={24} />
-                </button>
-              </div>
-
-              {/* Progress Indicators */}
-              <div className="flex justify-center gap-2 mt-8">
-                {filteredLocalScenes.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCarouselIndex(i)}
-                    className={`h-1.5 rounded-full transition-all duration-500 ${i === carouselIndex ? 'w-8 bg-violet-500' : 'w-2 bg-slate-800'}`}
-                  />
-                ))}
-              </div>
-            </div>
           ) : (
             <WorkspaceSection 
               items={filteredLocalScenes}

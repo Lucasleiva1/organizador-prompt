@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   BrainCircuit, 
   ImagePlus, 
-  CheckCircle, 
   FileDown, 
   Plus, 
   Trash2, 
@@ -10,9 +9,7 @@ import {
   FolderOpen, 
   LayoutGrid, 
   LayoutList, 
-  View, 
-  ChevronLeft, 
-  ChevronRight,
+  View,
   Maximize2,
   X,
   Sparkles
@@ -49,13 +46,25 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
   const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Auto-escaneo cuando cambia el nombre o hay nuevos paneles
   React.useEffect(() => {
     const timer = setTimeout(scanProjectImages, 1500);
     return () => clearTimeout(timer);
   }, [projectName, panels.length]);
+
+  // Reference for Framer Motion drag constraints
+  const carouselOuterRef = React.useRef<HTMLDivElement>(null);
+  const carouselInnerRef = React.useRef<HTMLDivElement>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
+
+  React.useEffect(() => {
+    if (carouselOuterRef.current && carouselInnerRef.current && viewMode === 'carousel') {
+      const width = carouselInnerRef.current.scrollWidth - carouselOuterRef.current.offsetWidth;
+      setCarouselWidth(width > 0 ? width : 0);
+    }
+  }, [panels, viewMode]);
+
 
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
@@ -447,7 +456,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         
-        doc.text(`• Optics: ${p.optics || "8K RAW / 100mm Macro"}`, xMeta, yPos + 22);
+        doc.text(`• Cámara: ${p.optics || "8K RAW / 100mm Macro"}`, xMeta, yPos + 22);
         doc.text(`• Physics: ${p.physics || "Standard Dynamic"}`, xMeta, yPos + 26);
         doc.text(`• Timeline: ${p.timing || "3s"}`, xMeta, yPos + 30);
 
@@ -644,59 +653,31 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             )}
 
             {viewMode === 'carousel' && (
-              <div className="relative animate-in fade-in duration-700 pb-20 overflow-hidden">
-                <div className="flex items-center justify-center gap-8 px-12">
-                  <button 
-                    onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                    disabled={currentIndex === 0}
-                    className="p-4 bg-slate-900 border border-white/10 rounded-full text-white disabled:opacity-20 hover:bg-violet-600 transition-all z-20 shadow-2xl"
-                  >
-                    <ChevronLeft size={24} />
-                  </button>
-
-                  <div className="flex-1 max-w-4xl relative min-h-[500px] flex items-center justify-center">
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={currentIndex}
-                        initial={{ opacity: 0, scale: 0.9, x: 100 }}
-                        animate={{ opacity: 1, scale: 1, x: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, x: -100 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="w-full"
-                      >
-                        <PanelCard 
-                          panel={panels[currentIndex]} 
-                          index={currentIndex} 
-                          image={projectImages[panels[currentIndex].scene]}
-                          hasError={imageErrors[panels[currentIndex].scene]}
-                          onUpload={uploadImageForPanel}
-                          onRemove={removeImageForPanel}
-                          onError={() => setImageErrors(prev => ({ ...prev, [panels[currentIndex].scene]: true }))}
-                          isCarousel
-                        />
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-
-                  <button 
-                    onClick={() => setCurrentIndex(prev => Math.min(panels.length - 1, prev + 1))}
-                    disabled={currentIndex === panels.length - 1}
-                    className="p-4 bg-slate-900 border border-white/10 rounded-full text-white disabled:opacity-20 hover:bg-violet-600 transition-all z-20 shadow-2xl"
-                  >
-                    <ChevronRight size={24} />
-                  </button>
-                </div>
-                
-                {/* Carousel Indicators */}
-                <div className="flex justify-center gap-2 mt-8">
-                  {panels.map((_, i) => (
-                    <button 
-                      key={i}
-                      onClick={() => setCurrentIndex(i)}
-                      className={`h-1.5 rounded-full transition-all ${i === currentIndex ? 'w-8 bg-violet-500' : 'w-2 bg-white/10 hover:bg-white/20'}`}
-                    />
+              <div 
+                ref={carouselOuterRef}
+                className="w-full overflow-hidden cursor-grab active:cursor-grabbing pb-8 pt-4 px-2"
+              >
+                <motion.div 
+                  ref={carouselInnerRef}
+                  drag="x"
+                  dragConstraints={{ right: 0, left: -carouselWidth }}
+                  dragElastic={0.05}
+                  className="flex flex-row gap-6 w-max px-4"
+                >
+                  {panels.map((p, index) => (
+                    <div key={index} className="min-w-[320px] w-[320px] relative group flex-shrink-0 flex">
+                      <PanelCard 
+                        panel={p} 
+                        index={index} 
+                        image={projectImages[p.scene]}
+                        hasError={imageErrors[p.scene]}
+                        onUpload={uploadImageForPanel}
+                        onRemove={removeImageForPanel}
+                        onError={() => setImageErrors(prev => ({ ...prev, [p.scene]: true }))}
+                      />
+                    </div>
                   ))}
-                </div>
+                </motion.div>
               </div>
             )}
 
@@ -847,7 +828,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 // COMPONENT HELPERS
 const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError, isVertical, isCarousel }: any) => {
   return (
-    <div className={`flex flex-col bg-slate-900/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl hover:border-violet-500/40 transition-all duration-300 group ${isVertical ? 'flex-row min-h-[300px]' : ''} ${isCarousel ? 'w-full shadow-[0_0_100px_rgba(139,92,246,0.15)]' : ''}`}>
+    <div className={`flex flex-col bg-slate-900/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl hover:border-violet-500/40 transition-all duration-300 group ${isVertical ? 'flex-row min-h-[300px]' : 'h-full w-full'}`}>
       
       {/* Image Area */}
       <div className={`relative bg-black group-hover:bg-slate-950 transition-colors ${isVertical ? 'w-1/3' : 'aspect-video'} ${isCarousel ? 'h-[350px]' : ''}`}>
@@ -913,9 +894,9 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
       </div>
 
       {/* Content Area */}
-      <div className={`p-8 flex flex-col gap-6 ${isVertical ? 'w-2/3 justify-center' : ''}`}>
-        <div className="space-y-2 group/field">
-          <div className="flex justify-between items-center">
+      <div className={`p-8 flex flex-col gap-6 flex-1 ${isVertical ? 'w-2/3 justify-center' : ''}`}>
+        <div className="flex flex-col gap-2 flex-grow group/field">
+          <div className="flex justify-between items-center flex-shrink-0">
             <span className="text-[10px] font-black text-violet-400/70 uppercase tracking-[0.2em]">Acción / Prompt</span>
             <button 
               onClick={() => {
@@ -927,37 +908,35 @@ const PanelCard = ({ panel, index, image, hasError, onUpload, onRemove, onError,
               <Copy size={12} />
             </button>
           </div>
-          <p className="text-slate-200 text-sm leading-relaxed font-bold italic font-serif">
-            "{panel.description}"
-          </p>
+          <div className="pb-2">
+            <p className="text-slate-200 text-sm leading-relaxed font-bold italic font-serif">
+              "{panel.description}"
+            </p>
+          </div>
         </div>
 
-        <div className={`grid gap-4 ${isVertical ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Óptica</span>
-            <span className="text-violet-300 font-mono text-[10px]">{panel.optics || "N/A"}</span>
+        <div className="flex flex-col gap-3 flex-shrink-0 mt-auto">
+          <div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 flex flex-col">
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Cámara</span>
+            <div>
+              <span className="text-violet-300 font-mono text-[10px] leading-relaxed">{panel.optics || "N/A"}</span>
+            </div>
           </div>
-          <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Física</span>
-            <span className="text-emerald-400 font-mono text-[10px] truncate block">{panel.physics || "Standard"}</span>
+          <div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 flex flex-col">
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Física</span>
+            <div>
+              <span className="text-emerald-400 font-mono text-[10px] leading-relaxed">{panel.physics || "Standard"}</span>
+            </div>
           </div>
           {isVertical && (
-            <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-2">Tiempo</span>
-              <span className="text-amber-500 font-mono text-[10px]">{panel.timing || "3s"}</span>
+            <div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 flex flex-col">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 flex-shrink-0">Tiempo</span>
+              <div>
+                <span className="text-amber-500 font-mono text-[10px] leading-relaxed">{panel.timing || "3s"}</span>
+              </div>
             </div>
           )}
         </div>
-
-        {!isVertical && (
-          <div className="flex items-center justify-between pt-4 border-t border-white/5">
-             <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                <CheckCircle size={14} className="text-emerald-500" />
-                Validado por Qwen
-             </div>
-             <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">{panel.timing || "3s"}</span>
-          </div>
-        )}
       </div>
     </div>
   );

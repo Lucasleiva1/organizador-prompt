@@ -109,7 +109,7 @@ export const SceneCard = ({
     <Root
       {...(!isCarousel ? { value: scene, id: String(scene.id) } : {})}
       dragListener={false}
-      className={`relative w-full cursor-default list-none group perspective-2000 transition-all duration-500 ${isVertical ? 'h-[320px]' : isCarousel ? 'h-[600px]' : 'h-[440px]'}`}
+      className={`relative w-full cursor-default list-none group perspective-2000 transition-all duration-500 ${isVertical ? 'h-[320px]' : 'h-[440px]'}`}
     >
       <motion.div
         animate={{ rotateY: isVideo ? 180 : 0 }}
