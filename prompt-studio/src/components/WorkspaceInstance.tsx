@@ -226,7 +226,7 @@ export const WorkspaceInstance = ({
         scenes: scenes.filter(s => (s.groupId || 'default') === workspace.id)
       };
       
-      const suggestedName = `workspace_${workspace.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+      const suggestedName = `workspace_${(workspace.name || 'section').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
       const fullPath = await saveDialog({
         title: "Exportar Sección (JSON)",
         defaultPath: suggestedName,
