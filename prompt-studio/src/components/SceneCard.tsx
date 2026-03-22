@@ -12,7 +12,8 @@ import {
   Music,
   Zap,
   Trash,
-  Minimize2
+  Minimize2,
+  Image as ImageIcon
 } from "lucide-react";
 import { Scene } from "../types";
 import { AssetManager } from "../utils/AssetManager";
@@ -113,9 +114,11 @@ export const SceneCard = ({
   const [isEditingImage, setIsEditingImage] = useState(false);
   const [isEditingVideo, setIsEditingVideo] = useState(false);
   const [isFrontExpanded, setIsFrontExpanded] = useState(false);
+  const [isBackExpanded, setIsBackExpanded] = useState(false);
   
 
   const fileInputRefFront = useRef<HTMLInputElement>(null);
+  const fileInputRefBack = useRef<HTMLInputElement>(null);
   const textareaRefImage = useRef<HTMLTextAreaElement>(null);
   const textareaRefVideo = useRef<HTMLTextAreaElement>(null);
 
@@ -191,11 +194,24 @@ export const SceneCard = ({
                   <button onClick={() => setShowTranslateImage(false)} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${!showTranslateImage ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>ES</button>
                   <button onClick={() => { setShowTranslateImage(true); if (!scene.translatedImageText) onTranslate(scene.id, "image"); }} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${showTranslateImage ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>EN</button>
                </div>
-               <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
-                  <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
-                  <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Video" />
-                  <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
-               </div>
+                <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
+                   <CardAction 
+                     icon={ImageIcon} 
+                     onClick={() => fileInputRefFront.current?.click()} 
+                     color="emerald" 
+                     tooltip="Subir Imagen" 
+                   />
+                   <CardAction 
+                     icon={Maximize2} 
+                     onClick={() => scene.asset && setIsFrontExpanded(true)} 
+                     color="cyan" 
+                     tooltip="Ver Pantalla Completa" 
+                   />
+                   <div className="w-px h-4 bg-white/10 mx-0.5" />
+                   <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
+                   <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Video" />
+                   <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
+                </div>
             </div>
           </header>
 
@@ -322,15 +338,57 @@ export const SceneCard = ({
                   <button onClick={() => setShowTranslateVideo(false)} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${!showTranslateVideo ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>ES</button>
                   <button onClick={() => { setShowTranslateVideo(true); if (!scene.translatedVideoText) onTranslate(scene.id, "video"); }} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${showTranslateVideo ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>EN</button>
                </div>
-               <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
-                  <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
-                  <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Imagen" />
-                  <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
-               </div>
-            </div>
-          </header>
-
-          <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
+                <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
+                   <CardAction 
+                     icon={ImageIcon} 
+                     onClick={() => fileInputRefBack.current?.click()} 
+                     color="emerald" 
+                     tooltip="Subir Imagen" 
+                   />
+                   <CardAction 
+                     icon={Maximize2} 
+                     onClick={() => scene.asset && setIsBackExpanded(true)} 
+                     color="cyan" 
+                     tooltip="Ver Pantalla Completa" 
+                   />
+                   <div className="w-px h-4 bg-white/10 mx-0.5" />
+                   <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
+                   <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Imagen" />
+                    <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
+                 </div>
+                 <input type="file" ref={fileInputRefBack} className="hidden" accept="image/*" onChange={handleFileSelect} />
+             </div>
+           </header>
+ 
+           <AnimatePresence>
+              {isBackExpanded && scene.asset && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="absolute inset-0 z-50 bg-[#050505] rounded-xl flex flex-col p-4 border-2 border-violet-500/30 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+                >
+                  <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-2">
+                     <div className="text-[10px] text-violet-400 font-black uppercase tracking-[.3em]">PREVISUALIZACIÓN DE VIDEO</div>
+                     <button 
+                       onClick={() => setIsBackExpanded(false)}
+                       className="p-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-lg hover:bg-violet-500/20 transition-all"
+                     >
+                       <Minimize2 size={14} />
+                     </button>
+                  </div>
+                  <div className="flex-1 relative overflow-hidden rounded-lg bg-black/40 border border-white/5">
+                     <img 
+                       src={assetUrl} 
+                       alt="Expanded View" 
+                       className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(139,92,246,0.1)]"
+                     />
+                  </div>
+                </motion.div>
+              )}
+           </AnimatePresence>
+ 
+           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
              <div className="flex-[1.5] flex flex-col min-w-0">
                 <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2 opacity-70">VIDEO PROMPT</div>
                 <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
