@@ -12,8 +12,7 @@ import {
   Music,
   Zap,
   Trash,
-  Minimize2,
-  Image as ImageIcon
+  Minimize2
 } from "lucide-react";
 import { Scene } from "../types";
 import { AssetManager } from "../utils/AssetManager";
@@ -217,11 +216,11 @@ export const SceneCard = ({
                  
                  {/* ACCIONES SOBRE IMAGEN - ALWAYS AVAILABLE ON HOVER */}
                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-start justify-end p-1.5 gap-1.5">
-                    <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
+                    <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
                     {scene.asset && (
                       <>
-                        <button onClick={() => setIsFrontExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
-                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
+                        <button onClick={() => setIsFrontExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
                       </>
                     )}
                  </div>
@@ -380,11 +379,11 @@ export const SceneCard = ({
                        </div>
                     )}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex items-start justify-end p-1.5 gap-1.5">
-                       <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
+                       <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
                        {scene.asset && (
                          <>
-                           <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
-                           <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
+                           <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                           <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
                          </>
                        )}
                     </div>
