@@ -1,8 +1,7 @@
-import { useState, useRef, useMemo, useEffect } from "react";
-import { Reorder, motion, AnimatePresence, useDragControls } from "framer-motion";
+import { useState, useRef, useEffect } from "react";
+import { Reorder, motion, useDragControls } from "framer-motion";
 import { X, Plus, Trash2, GripHorizontal, GripVertical, Upload, FileDown, Folder, Edit3, Copy, Check, Save, FolderOpen } from "lucide-react";
 import { Script } from "../types";
-import { SceneCard } from "./SceneCard";
 import jsPDF from "jspdf";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { writeFile, mkdir, writeTextFile } from "@tauri-apps/plugin-fs";
