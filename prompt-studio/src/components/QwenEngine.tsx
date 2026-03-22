@@ -12,8 +12,7 @@ import {
   View,
   Maximize2,
   X,
-  Sparkles,
-  Save
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
@@ -511,41 +510,6 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     }
   };
 
-  const saveStoryboardJSON = async () => {
-    try {
-      const filePath = await saveDialog({
-        title: "Guardar Storyboard (JSON)",
-        defaultPath: `storyboard-${projectName}-${new Date().toISOString().slice(0, 10)}.json`,
-        filters: [{ name: "Storyboard JSON", extensions: ["json"] }]
-      });
-      if (!filePath) return;
-      const data = JSON.stringify({ projectName, panels }, null, 2);
-      await writeFile(filePath, new Uint8Array(new TextEncoder().encode(data)));
-    } catch (err) {
-      console.error("Error saving storyboard JSON:", err);
-      alert("Error al guardar el storyboard.");
-    }
-  };
-
-  const loadStoryboardJSON = async () => {
-    try {
-      const filePath = await openFileDialog({
-        title: "Cargar Storyboard (JSON)",
-        filters: [{ name: "Storyboard JSON", extensions: ["json"] }],
-        multiple: false
-      });
-      if (!filePath || typeof filePath !== "string") return;
-      const content = await readFile(filePath);
-      const text = new TextDecoder().decode(content);
-      const data = JSON.parse(text);
-      if (data.projectName) setProjectName(data.projectName);
-      if (data.panels && Array.isArray(data.panels)) setPanels(data.panels);
-    } catch (err) {
-      console.error("Error loading storyboard JSON:", err);
-      alert("Error al cargar el storyboard.");
-    }
-  };
-
   const handleAddToWorkspace = () => {
     if (onAddGeneratedScenes && panels.length > 0) {
       onAddGeneratedScenes(panels);
@@ -627,11 +591,10 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               </button>
               <button 
                 onClick={openProjectFolder}
-                className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] text-slate-400 hover:text-white px-4 py-2.5 rounded transition-all border border-[#333] group/folder"
+                className="p-2.5 bg-[#1a1a1a] hover:bg-[#222] text-slate-400 hover:text-white rounded transition-all border border-[#333]"
                 title="Abrir carpeta raíz"
               >
-                <FolderOpen size={18} className="group-hover/folder:scale-110 transition-transform duration-300" />
-                <span className="text-[10px] font-black uppercase tracking-widest leading-none">ABRIR</span>
+                <FolderOpen size={18} />
               </button>
             </div>
 
@@ -646,29 +609,10 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
             <button 
               onClick={exportToPDF}
               disabled={panels.length === 0 || isProcessing}
-              className="flex items-center gap-2 bg-[#1a1a1a] border border-[#333] hover:bg-[#222] hover:text-emerald-400 disabled:bg-[#111] disabled:text-slate-600 text-slate-300 px-6 py-2.5 rounded font-bold transition-all group/export cursor-pointer disabled:cursor-not-allowed"
-              title="Exportar Storyboard a PDF"
+              className="flex items-center gap-2 bg-[#222] border border-[#333] hover:bg-[#333] hover:text-emerald-400 disabled:bg-[#111] disabled:text-slate-600 text-slate-300 px-6 py-2.5 rounded font-bold transition-all group/export cursor-pointer disabled:cursor-not-allowed"
             >
               <FileDown size={18} className="group-hover/export:-translate-y-0.5 transition-transform duration-300" />
-              <span className="text-[10px] uppercase font-bold tracking-widest hidden lg:block">PDF</span>
-            </button>
-
-            <button 
-              onClick={saveStoryboardJSON}
-              disabled={panels.length === 0 || isProcessing}
-              className="flex items-center justify-center bg-[#1a1a1a] border border-[#333] hover:bg-[#222] hover:text-emerald-400 disabled:bg-[#111] disabled:text-slate-600 text-slate-300 w-[50px] h-[42px] rounded font-bold transition-all group/save cursor-pointer disabled:cursor-not-allowed"
-              title="Guardar Storyboard (JSON)"
-            >
-              <Save size={18} className="group-hover/save:scale-110 transition-transform duration-300" />
-            </button>
-
-            <button 
-              onClick={loadStoryboardJSON}
-              disabled={isProcessing}
-              className="flex items-center justify-center bg-[#1a1a1a] border border-[#333] hover:bg-[#222] hover:text-violet-400 disabled:bg-[#111] disabled:text-slate-600 text-slate-300 w-[50px] h-[42px] rounded font-bold transition-all group/load cursor-pointer disabled:cursor-not-allowed"
-              title="Cargar Storyboard (JSON)"
-            >
-              <FolderOpen size={18} className="group-hover/load:scale-110 transition-transform duration-300" />
+              <span className="text-[10px] uppercase font-bold tracking-widest">Exportar PDF</span>
             </button>
           </div>
         </div>

@@ -101,5 +101,99 @@ export const ProductionAgent = {
           sceneNumber: shotNumber
         };
       });
+  },
+
+  /**
+   * IA-Powered scanning/splitting of technical text.
+   * This uses the local Ollama model to scan a block of text and return it split by scene.
+   */
+  /**
+   * IA-Powered scanning/splitting of technical text with PROGRESS support.
+   */
+  scanAndSplitTechnicalText: async (
+    rawText: string, 
+    onProgress?: (current: number, total: number, lastScene?: any) => void
+  ): Promise<any[]> => {
+    console.log("IA Scaneando texto técnico incrementalmente...");
+    
+    // 1. Identificar bloques de planos (Regex para PLANO X, SHOT X, ESCENA X)
+    const segments = rawText.split(/(?=PLANO|SHOT|ESCENA|SCENE|Panel \d+)/i).filter(s => s.trim().length > 5);
+    const total = segments.length;
+    const allResults: any[] = [];
+
+    const systemPrompt = `Actúa como un EXPORTADOR DE DATOS CINEMATOGRÁFICOS profesional. 
+    Tu única función es transformar la SIGUIENTE descripción de escena en un objeto JSON.
+    REGLAS:
+    - Devuelve SOLO el OBJETO JSON: { "sceneNumber": number, "imageText": string, "optics": string, "physics": string, "vfx": string, "sound": string, "action": string }.
+    - Si un dato no existe, usa "N/A".`.trim();
+
+    for (let i = 0; i < total; i++) {
+      const segment = segments[i].trim();
+      console.log(`[ProductionAgent] Procesando segmento ${i+1}/${total}: "${segment.substring(0, 30)}..."`);
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+        const response = await fetch('http://127.0.0.1:11434/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: "qwen3.5:2b",
+            prompt: `${systemPrompt}\n\nTEXTO A PROCESAR:\n${segment}`,
+            stream: false,
+            format: "json",
+            options: { temperature: 0.0 }
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`[ProductionAgent] Respuesta recibida para segmento ${i+1}`);
+          let scene;
+          try {
+            // Intentar extraer JSON de la respuesta
+            const rawResponse = data.response;
+            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              scene = JSON.parse(jsonMatch[0]);
+            } else {
+              throw new Error("No JSON found in response");
+            }
+          } catch (e) {
+            console.warn(`[ProductionAgent] Falló parseo JSON en segmento ${i+1}, usando fallback básico.`);
+            scene = {
+              sceneNumber: i + 1,
+              imageText: segment.substring(0, 500),
+              optics: "N/A", physics: "N/A", vfx: "N/A", sound: "N/A", action: "N/A"
+            };
+          }
+
+          if (scene) {
+            const finalScene = {
+              ...scene,
+              id: crypto.randomUUID(),
+              mode: 'image',
+              groupId: 'default', // Fallback
+              sceneNumber: scene.sceneNumber || (i + 1)
+            };
+            allResults.push(finalScene);
+            if (onProgress) onProgress(i + 1, total, finalScene);
+          }
+        } else {
+          console.error(`[ProductionAgent] Error en respuesta de Ollama: ${response.status}`);
+        }
+      } catch (e: any) {
+        console.error(`[ProductionAgent] Error crítico en segmento ${i+1}:`, e.message);
+        if (e.name === 'AbortError') {
+          console.error("[ProductionAgent] Tiempo de espera agotado (Timeout).");
+        }
+      }
+    }
+
+    return allResults;
   }
 };

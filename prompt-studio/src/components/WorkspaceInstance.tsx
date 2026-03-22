@@ -211,6 +211,7 @@ export const WorkspaceInstance = ({
     saveScenes([...scenes, ...newScenes]);
   };
 
+
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -579,6 +580,7 @@ export const WorkspaceInstance = ({
   return (
     <div className={`grid grid-cols-1 lg:grid-cols-4 gap-6 mb-16 ${containerClasses}`} onDrop={handleDrop} onDragOver={e => e.preventDefault()}>
       
+
       {/* Section Header */}
       <div className="col-span-1 lg:col-span-4 flex items-center justify-between mb-2 bg-[#0a0a0a] border border-[#222] p-4 rounded-2xl shadow-xl">
         <div className="flex items-center gap-4">
@@ -741,12 +743,14 @@ export const WorkspaceInstance = ({
               value={imageMarkdown}
               onChange={(e) => setImageMarkdown(e.target.value)}
             />
-            <button 
-              onClick={() => addPromptsToScenes(imageMarkdown, 'image')} 
-              className="w-full py-2 rounded-lg font-bold text-[10px] tracking-[0.2em] uppercase text-slate-400 bg-[#111] hover:bg-[#222] hover:text-slate-300 border border-[#222] transition-all"
-            >
-              + AGREGAR IMÁGENES
-            </button>
+              <button 
+                onClick={() => addPromptsToScenes(imageMarkdown, 'image')} 
+                disabled={!imageMarkdown.trim()}
+                className="flex-1 py-3 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all shadow-xl shadow-emerald-500/5 group"
+              >
+                <Plus size={14} className="inline mr-2 group-hover:rotate-90 transition-transform" />
+                Cargar Planos
+              </button>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -757,14 +761,18 @@ export const WorkspaceInstance = ({
               value={videoMarkdown}
               onChange={(e) => setVideoMarkdown(e.target.value)}
             />
-            <button 
-              onClick={() => addPromptsToScenes(videoMarkdown, 'video')} 
-              className="w-full py-2 rounded-lg font-bold text-[10px] tracking-[0.2em] uppercase text-slate-400 bg-[#111] hover:bg-[#222] hover:text-slate-300 border border-[#222] transition-all"
-            >
-              + AGREGAR VIDEOS
-            </button>
+              <button 
+                onClick={() => addPromptsToScenes(videoMarkdown, 'video')} 
+                disabled={!videoMarkdown.trim()}
+                className="flex-1 py-3 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-all shadow-xl shadow-sky-500/5 group"
+              >
+                <Plus size={14} className="inline mr-2 group-hover:rotate-90 transition-transform" />
+                Cargar Planos
+              </button>
           </div>
         </div>
+
+        {/* IA SCANNER SECTION REMOVED */}
 
         {/* Stats */}
         <div className="bg-[#0a0a0a] rounded-2xl p-5 border border-[#222]">
