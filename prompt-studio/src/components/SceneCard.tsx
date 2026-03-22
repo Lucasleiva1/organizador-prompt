@@ -195,19 +195,6 @@ export const SceneCard = ({
                   <button onClick={() => { setShowTranslateImage(true); if (!scene.translatedImageText) onTranslate(scene.id, "image"); }} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${showTranslateImage ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>EN</button>
                </div>
                 <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
-                   <CardAction 
-                     icon={ImageIcon} 
-                     onClick={() => fileInputRefFront.current?.click()} 
-                     color="emerald" 
-                     tooltip="Subir Imagen" 
-                   />
-                   <CardAction 
-                     icon={Maximize2} 
-                     onClick={() => scene.asset && setIsFrontExpanded(true)} 
-                     color="cyan" 
-                     tooltip="Ver Pantalla Completa" 
-                   />
-                   <div className="w-px h-4 bg-white/10 mx-0.5" />
                    <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
                    <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Video" />
                    <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
@@ -218,7 +205,7 @@ export const SceneCard = ({
           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4 overflow-hidden">
             <div className="flex-[1.5] flex flex-col min-w-0">
 
-               <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-24`}>
+               <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-24 group/img`}>
                  {scene.asset ? (
                    <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
                  ) : (
@@ -227,12 +214,17 @@ export const SceneCard = ({
                     </div>
                  )}
                  <input type="file" ref={fileInputRefFront} className="hidden" accept="image/*" onChange={handleFileSelect} />
-                 {scene.asset && (
-                    <div className="absolute bottom-2 right-2 flex gap-1">
-                       <button onClick={() => setIsFrontExpanded(true)} className="p-1 bg-black/60 rounded text-white/50 hover:text-white transition-all hover:scale-110"><Maximize2 size={12}/></button>
-                       <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 bg-black/60 rounded text-red-400/50 hover:text-red-400"><Trash2 size={12}/></button>
-                    </div>
-                 )}
+                 
+                 {/* ACCIONES SOBRE IMAGEN - ALWAYS AVAILABLE ON HOVER */}
+                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button onClick={() => fileInputRefFront.current?.click()} className="p-1.5 bg-black/80 rounded-lg text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl"><Upload size={14}/></button>
+                    {scene.asset && (
+                      <>
+                        <button onClick={() => setIsFrontExpanded(true)} className="p-1.5 bg-black/80 rounded-lg text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl"><Maximize2 size={14}/></button>
+                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1.5 bg-black/80 rounded-lg text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl"><Trash2 size={14}/></button>
+                      </>
+                    )}
+                 </div>
                </div>
 
                {/* FULL CARD IMAGE OVERLAY */}
@@ -339,19 +331,6 @@ export const SceneCard = ({
                   <button onClick={() => { setShowTranslateVideo(true); if (!scene.translatedVideoText) onTranslate(scene.id, "video"); }} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${showTranslateVideo ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>EN</button>
                </div>
                 <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
-                   <CardAction 
-                     icon={ImageIcon} 
-                     onClick={() => fileInputRefBack.current?.click()} 
-                     color="emerald" 
-                     tooltip="Subir Imagen" 
-                   />
-                   <CardAction 
-                     icon={Maximize2} 
-                     onClick={() => scene.asset && setIsBackExpanded(true)} 
-                     color="cyan" 
-                     tooltip="Ver Pantalla Completa" 
-                   />
-                   <div className="w-px h-4 bg-white/10 mx-0.5" />
                    <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
                    <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Imagen" />
                     <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
@@ -390,8 +369,28 @@ export const SceneCard = ({
  
            <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
              <div className="flex-[1.5] flex flex-col min-w-0">
-                <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2 opacity-70">VIDEO PROMPT</div>
-                <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
+                 <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2 opacity-70">VIDEO PROMPT</div>
+                 
+                 <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-20 group/img-back`}>
+                    {scene.asset ? (
+                      <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
+                    ) : (
+                       <div onClick={() => fileInputRefBack.current?.click()} className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
+                          <Upload size={14} className="text-violet-400 opacity-50" />
+                       </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                       <button onClick={() => fileInputRefBack.current?.click()} className="p-1.5 bg-black/80 rounded-lg text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl"><Upload size={14}/></button>
+                       {scene.asset && (
+                         <>
+                           <button onClick={() => setIsBackExpanded(true)} className="p-1.5 bg-black/80 rounded-lg text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl"><Maximize2 size={14}/></button>
+                           <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1.5 bg-black/80 rounded-lg text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl"><Trash2 size={14}/></button>
+                         </>
+                       )}
+                    </div>
+                 </div>
+
+                 <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
                     <textarea
                       className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingVideo ? 'pointer-events-none' : 'focus:border-violet-500/50'}`}
                       value={showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText}
