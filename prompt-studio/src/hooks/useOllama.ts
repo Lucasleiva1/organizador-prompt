@@ -10,7 +10,7 @@ export const useOllama = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: "qwen3:0.6b", // defaulting to the user's preferred version
+          model: "qwen3.5:2b", // Using the user's specific local model confirmed via screenshot
           prompt: systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt,
           stream: false,
           format: isJson ? "json" : undefined,

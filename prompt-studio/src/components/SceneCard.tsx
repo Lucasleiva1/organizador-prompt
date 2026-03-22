@@ -14,6 +14,7 @@ import {
   Trash,
   Minimize2
 } from "lucide-react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Scene } from "../types";
 import { AssetManager } from "../utils/AssetManager";
 
@@ -25,46 +26,51 @@ interface ParsedMetadata {
   lighting: string;
   audio: string;
   dynamics: string;
+  vfx: string;
+  sound: string;
 }
 
 // Helper for parsing script text into prompt and metadata
 const parseScriptText = (text: string): ParsedMetadata => {
   const metadata: Record<string, string> = {};
-  let optics = "";
-  let lighting = "";
-  let audio = "";
-  let dynamics = "";
-  let mainPrompt = text;
   
-  const rules = [
-    { key: 'Óptica & Sensor', field: 'optics' as const, regex: /(?:Óptica & Sensor|Óptica|Cámara|Lente):\s*(.*?)(?=\n|$)/i },
-    { key: 'Iluminación & Atmósfera', field: 'lighting' as const, regex: /(?:Iluminación & Atmósfera|Iluminación|Luz|Atmósfera):\s*(.*?)(?=\n|$)/i },
-    { key: 'Música & Audio', field: 'audio' as const, regex: /(?:Música & Sonido|Música|Audio):\s*(.*?)(?=\n|$)/i },
-    { key: 'Efecto & Dinámica', field: 'dynamics' as const, regex: /(?:Efecto & Física|Efecto|Efectos|Física|Dinámica):\s*(.*?)(?=\n|$)/i },
-  ];
-
-  rules.forEach(({key, field, regex}) => {
-    const match = text.match(regex);
-    if (match) {
-       metadata[key] = match[1];
-       if (field === 'optics') optics = match[1];
-       if (field === 'lighting') lighting = match[1];
-       if (field === 'audio') audio = match[1];
-       if (field === 'dynamics') dynamics = match[1];
+  const getField = (keys: string[]) => {
+    for (const key of keys) {
+      const regex = new RegExp(`(?:${key}):\\s*(.*?)(?=\\n|\\*\\*|$)`, 'i');
+      const match = text.match(regex);
+      if (match) return match[1].trim();
     }
-  });
+    return "";
+  };
 
-  const visualMatch = text.match(/(?:Visual Instruction|Visual):\s*(.*?)(?=\n\n|\n[A-ZÁÉÍÓÚÑa-z]+[a-zA-Z\s&]*:|$)/s);
+  const optics = getField(['Óptica & Sensor', 'Óptica', 'Cámara', 'Lente']);
+  const lighting = getField(['Iluminación & Atmósfera', 'Iluminación', 'Luz', 'Atmósfera']);
+  const sound = getField(['Sound Design', 'Sonido', 'Audio', 'Música & Audio']);
+  const vfx = getField(['VFX & Post', 'VFX', 'Post-producción', 'Efectos']);
+  const audio = getField(['Audio', 'Música']);
+  const dynamics = getField(['Cinematic Action', 'Acción', 'Efecto & Dinámica', 'Dinámica']);
+
+  let mainPrompt = "";
+  const visualMatch = text.match(/(?:Visual Prompt \(Video Core\)|Visual Instruction|Visual|Descripción):\s*(.*?)(?=\\n|\\*\\*|$)/s);
+  
   if (visualMatch) {
     mainPrompt = visualMatch[1].trim();
   } else {
-    let temp = text;
-    rules.forEach(({regex}) => { temp = temp.replace(new RegExp(regex.source, 'gi'), ''); });
-    temp = temp.replace(/SECCIÓN.*?\n/g, '').replace(/PLANO.*?\n/g, '').replace(/###.*?\n/g, '').replace(/##.*?\n/g, '');
-    mainPrompt = temp.trim();
+    // Fallback cleaning
+    mainPrompt = text
+      .replace(/###\s*PLANO\s*\d+.*?\n/gi, '')
+      .replace(/##.*?\n/g, '')
+      .replace(/#.*?\n/g, '')
+      .split('\n')
+      .filter(line => !line.includes(':'))
+      .join(' ')
+      .trim();
   }
   
-  return { mainPrompt, metadata, optics, lighting, audio, dynamics };
+  // Ensure the internal PLANO header matches the card index
+  // const shotNumber = sceneIndex + 1; // Removed as requested or handled via UI sync
+
+  return { mainPrompt, metadata, optics, lighting, audio, dynamics, vfx, sound };
 };
 
 export const CardAction = ({ icon: Icon, onClick, onDoubleClick, disabled, color, tooltip }: any) => {
@@ -114,6 +120,8 @@ export const SceneCard = ({
   const [isEditingVideo, setIsEditingVideo] = useState(false);
   const [isFrontExpanded, setIsFrontExpanded] = useState(false);
   const [isBackExpanded, setIsBackExpanded] = useState(false);
+  const [copiedFront, setCopiedFront] = useState(false);
+  const [copiedBack, setCopiedBack] = useState(false);
   
 
   const fileInputRefFront = useRef<HTMLInputElement>(null);
@@ -137,7 +145,15 @@ export const SceneCard = ({
 
   useEffect(() => {
     if (scene.asset) {
-      AssetManager.resolveAssetUrl(scene.asset).then(setAssetUrl);
+      if (scene.asset.startsWith('http') || scene.asset.startsWith('data:') || scene.asset.startsWith('blob:')) {
+        setAssetUrl(scene.asset);
+      } else if (scene.asset.includes(':/') || scene.asset.includes(':\\') || scene.asset.startsWith('/')) {
+        // Absolute system path (Windows or Unix)
+        setAssetUrl(convertFileSrc(scene.asset));
+      } else {
+        // App asset (relative filename)
+        AssetManager.resolveAssetUrl(scene.asset).then(setAssetUrl);
+      }
     } else {
       setAssetUrl(undefined);
     }
@@ -219,7 +235,7 @@ export const SceneCard = ({
                     <div className="flex justify-end gap-1.5 pointer-events-auto">
                       <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
                       {scene.asset && (
-                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
+                        <button onDoubleClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar Imagen (2x click)"><Trash2 size={12}/></button>
                       )}
                     </div>
                     {scene.asset && (
@@ -268,9 +284,25 @@ export const SceneCard = ({
                     ref={textareaRefImage}
                   />
                   <button 
-                    onClick={() => { navigator.clipboard.writeText(parsedFront.mainPrompt); alert("Prompt visual copiado."); }}
-                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222]"
+                    onClick={() => { 
+                      navigator.clipboard.writeText(parsedFront.mainPrompt); 
+                      setCopiedFront(true);
+                      setTimeout(() => setCopiedFront(false), 2000);
+                    }}
+                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222] flex items-center gap-2"
                   >
+                    <AnimatePresence>
+                      {copiedFront && (
+                        <motion.span 
+                          initial={{ opacity: 0, x: 5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 5 }}
+                          className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                        >
+                          Copiado
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                     <Copy size={12} className="text-[#D4AF37]" />
                   </button>
                </div>
@@ -302,14 +334,32 @@ export const SceneCard = ({
                     </ul>
                   </div>
 
-                  {(parsedFront.audio || parsedFront.dynamics) && (
-                    <div className="technical-box opacity-60">
-                       <div className="flex items-center gap-2 mb-1.5 border-t border-[#222] pt-3">
-                        <Music size={12} className="text-slate-500" />
-                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">DETALLES EXTRA</span>
+                  {isVideo && (
+                    <>
+                      <div className="technical-box">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Zap size={12} className="text-[#D4AF37]" />
+                          <span className="text-[9px] text-[#D4AF37] font-black uppercase tracking-widest">VFX & POST</span>
+                        </div>
+                        <ul className="text-[10px] text-slate-400 space-y-1 list-none">
+                          {(parsedFront.vfx || scene.vfx || 'De serie').split(',').map((v: string, i: number) => (
+                            <li key={i} className="flex gap-2"><span className="text-[#D4AF37]/40">•</span> {v.trim()}</li>
+                          ))}
+                        </ul>
                       </div>
-                      <p className="text-[9px] text-slate-500 italic px-3">{parsedFront.audio} {parsedFront.dynamics}</p>
-                    </div>
+
+                      <div className="technical-box">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Music size={12} className="text-[#D4AF37]" />
+                          <span className="text-[9px] text-[#D4AF37] font-black uppercase tracking-widest">SOUND DESIGN</span>
+                        </div>
+                        <ul className="text-[10px] text-slate-400 space-y-1 list-none">
+                          {(parsedFront.sound || scene.sound || 'Ambiente').split(',').map((s: string, i: number) => (
+                            <li key={i} className="flex gap-2"><span className="text-[#D4AF37]/40">•</span> {s.trim()}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
                   )}
                </div>
             </div>
@@ -372,7 +422,6 @@ export const SceneCard = ({
  
            <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
              <div className="flex-[1.5] flex flex-col min-w-0">
-                 <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2 opacity-70">VIDEO PROMPT</div>
                  
                  <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-20 group/img-back`}>
                     {scene.asset ? (
@@ -400,15 +449,31 @@ export const SceneCard = ({
                  <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
                     <textarea
                       className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingVideo ? 'pointer-events-none' : 'focus:border-violet-500/50'}`}
-                      value={showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText}
+                      value={(showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText).replace(/^(###\s*PLANO\s*)\d+/i, `$1${index + 1}`)}
                       onChange={(e) => updateScene(scene.id, showTranslateVideo ? { translatedVideoText: e.target.value } : { videoText: e.target.value })}
                       onBlur={() => setIsEditingVideo(false)}
                       ref={textareaRefVideo}
                     />
                     <button 
-                      onClick={() => { navigator.clipboard.writeText(parsedBack.mainPrompt); alert("Video prompt copiado."); }}
-                      className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222]"
+                      onClick={() => { 
+                        navigator.clipboard.writeText(parsedBack.mainPrompt); 
+                        setCopiedBack(true);
+                        setTimeout(() => setCopiedBack(false), 2000);
+                      }}
+                      className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222] flex items-center gap-2"
                     >
+                      <AnimatePresence>
+                        {copiedBack && (
+                          <motion.span 
+                            initial={{ opacity: 0, x: 5 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 5 }}
+                            className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                          >
+                            Copiado
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
                       <Copy size={12} className="text-violet-400" />
                     </button>
                 </div>

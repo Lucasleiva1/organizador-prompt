@@ -12,6 +12,8 @@ export interface Scene {
   optics?: string;
   physics?: string;
   timing?: string;
+  vfx?: string;
+  sound?: string;
 }
 
 export interface Workspace {

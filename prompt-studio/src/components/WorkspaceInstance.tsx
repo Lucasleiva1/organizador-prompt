@@ -9,7 +9,7 @@ import { AssetManager } from "../utils/AssetManager";
 import { ProductionAgent } from "../utils/ProductionAgent";
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
-import { writeFile, mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
+import { writeFile, mkdir, writeTextFile, readDir } from '@tauri-apps/plugin-fs';
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 interface WorkspaceInstanceProps {
   index: number;
@@ -126,7 +126,43 @@ export const WorkspaceInstance = ({
     let parsedRawScenes: Scene[] = [];
     
     if (isTechnicalSheet) {
-      parsedRawScenes = ProductionAgent.parseSheet(rawText, workspace.id, workspace.theme || 'normal');
+      const parsedScenes = ProductionAgent.parseSheet(rawText, workspace.id, workspace.theme || 'normal');
+      const otherWorkspaceScenes = scenes.filter(s => s.groupId !== workspace.id);
+      const currentLocalScenes = scenes.filter(s => s.groupId === workspace.id);
+
+      let finalLocalScenes = [...currentLocalScenes];
+
+      parsedScenes.forEach(parsed => {
+        const targetPos = (parsed as any).sceneNumber || 1;
+        const index = targetPos - 1;
+
+        if (index < finalLocalScenes.length) {
+          finalLocalScenes[index] = {
+            ...finalLocalScenes[index],
+            imageText: parsed.imageText,
+            optics: (parsed as any).optics,
+            physics: (parsed as any).physics,
+            vfx: (parsed as any).vfx,
+            sound: (parsed as any).sound
+          };
+        } else {
+          while (finalLocalScenes.length < index) {
+            finalLocalScenes.push({
+              id: crypto.randomUUID(),
+              imageText: '',
+              videoText: '',
+              mode: 'image',
+              asset: null,
+              groupId: workspace.id,
+              theme: workspace.theme
+            });
+          }
+          finalLocalScenes.push(parsed);
+        }
+      });
+
+      saveScenes([...otherWorkspaceScenes, ...finalLocalScenes]);
+      return;
     } else if (hasTable) {
       parsedRawScenes = parseMarkdownTable(rawText);
     } else {
@@ -140,11 +176,6 @@ export const WorkspaceInstance = ({
       } else {
         parsedRawScenes = parseSimpleText(rawText, 'image');
       }
-    }
-
-    if (isTechnicalSheet) {
-      saveScenes([...scenes, ...parsedRawScenes]);
-      return;
     }
 
     const imagePrompts = parsedRawScenes.filter((s: Scene) => s.mode === 'image').map((s: Scene) => s.imageText);
@@ -440,6 +471,83 @@ export const WorkspaceInstance = ({
     }
   };
 
+  const syncProjectAssets = async () => {
+    const projectName = workspace.name?.trim();
+    if (!projectName || projectName === "Sin_Nombre") {
+      alert("Por favor, asigna un nombre a la sección para buscar su carpeta.");
+      return;
+    }
+
+    try {
+      const sysDocPath = await documentDir();
+      const promptStudioPath = await join(sysDocPath, 'Prompt Studio');
+      
+      let foundPath = "";
+
+      const scanRecursive = async (path: string) => {
+        const entries = await readDir(path);
+        for (const entry of entries) {
+          if (entry.isDirectory) {
+            if (entry.name === projectName) {
+              foundPath = await join(path, entry.name);
+              return;
+            }
+            await scanRecursive(await join(path, entry.name));
+            if (foundPath) return;
+          }
+        }
+      };
+
+      await scanRecursive(promptStudioPath);
+
+      if (!foundPath) {
+        alert(`No se encontró ninguna carpeta llamada "${projectName}" en Prompt Studio.`);
+        return;
+      }
+
+      const files = await readDir(foundPath);
+      const imageFiles = files.filter(f => f.isFile && /\.(png|jpg|jpeg|webp)$/i.test(f.name));
+      
+      if (imageFiles.length === 0) {
+        alert(`Carpeta encontrada, pero no contiene imágenes numeradas.`);
+        return;
+      }
+
+      const updatedScenes = [...scenes];
+      let syncCount = 0;
+
+      // Map local scenes to their global indices for updating
+      const localIndices = scenes.map((s, i) => (s.groupId || 'default') === workspace.id ? i : -1).filter(i => i !== -1);
+
+      for (let i = 0; i < localIndices.length; i++) {
+        const globalIdx = localIndices[i];
+        const shotNumber = i + 1;
+        // Search for a file that starts with the number (e.g., "1.png", "1_final.jpg")
+        const matchingFile = imageFiles.find(f => f.name.startsWith(`${shotNumber}.`) || f.name.startsWith(`${shotNumber}_`));
+        
+        if (matchingFile) {
+          const fullPath = await join(foundPath, matchingFile.name);
+          // For production mode, we might want to just link the asset if it's already structured
+          // But based on user request "que se coloquen automáticamente", we'll update the asset
+          // Using convertFileSrc to show it immediately
+          updatedScenes[globalIdx].asset = fullPath; 
+          syncCount++;
+        }
+      }
+
+      if (syncCount > 0) {
+        saveScenes(updatedScenes);
+        alert(`Sincronización completa: ${syncCount} imágenes cargadas.`);
+      } else {
+        alert(`No se encontró ninguna imagen numerada (1.png, 2.jpg...) en la carpeta.`);
+      }
+
+    } catch (err) {
+      console.error("Error syncing assets:", err);
+      alert("Error durante el escaneo de la carpeta.");
+    }
+  };
+
   // Golden theme styling applied at boundary
   const containerClasses = workspace.theme === 'golden' 
     ? 'bg-amber-500/5 !border-amber-500/20 p-6 rounded-[2rem] border-[3px] border-dashed shadow-[0_0_50px_rgba(245,158,11,0.05)]' 
@@ -485,6 +593,14 @@ export const WorkspaceInstance = ({
             placeholder="Nombre de la sección (opcional)..."
             className="bg-transparent border-none outline-none text-slate-300 font-semibold text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
           />
+          <button 
+            onClick={syncProjectAssets}
+            className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-500/20 transition-all flex items-center gap-2 group/sync"
+            title={`Escanear carpeta "${workspace.name || ''}" en Prompt Studio`}
+          >
+            <Sparkles size={18} className="group-hover/sync:rotate-12 transition-transform" />
+            <span className="text-[10px] font-black uppercase tracking-wider pr-1">Sincronizar Fotos</span>
+          </button>
         </div>
         
         <div className="flex items-center gap-1.5">
@@ -713,7 +829,7 @@ export const WorkspaceInstance = ({
                       <SceneCard 
                         key={scene.id}
                         scene={scene} 
-                        index={i}
+                        index={scene.sceneNumber !== undefined ? scene.sceneNumber - 1 : i}
                         updateScene={updateScene} 
                         deleteScene={deleteScene} 
                         duplicateScene={duplicateScene}
@@ -752,7 +868,7 @@ export const WorkspaceInstance = ({
                   <SceneCard 
                     key={scene.id} 
                     scene={scene} 
-                    index={localIndex} 
+                    index={scene.sceneNumber !== undefined ? scene.sceneNumber - 1 : localIndex} 
                     updateScene={updateScene} 
                     deleteScene={deleteScene} 
                     duplicateScene={duplicateScene}

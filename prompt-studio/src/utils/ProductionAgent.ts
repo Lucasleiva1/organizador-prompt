@@ -27,16 +27,27 @@ export const ProductionAgent = {
     const lines = rawText.split(/\r?\n/);
     let chunks: string[] = [];
     let currentChunk = "";
+    let currentSection = "";
     
-    // Pattern that handles: * **PLANO 1, - **PLANO 1, [cite_start]**PLANO 1, or just **PLANO 1
-    const panoPattern = /^\s*(?:[\*\-\+]\s*)?(?:\[cite_start\])?\s*\*?\*?(?:PLANO|PANEL|ESCENA|SCENE|SHOT)\s*\d+/i;
+    // Pattern for shot headers: PLANO 1, PANEL 2, etc.
+    const shotPattern = /^\s*(?:[\*\-\+]\s*)?(?:\[cite_start\])?\s*\*?\*?(?:PLANO|PANEL|ESCENA|SCENE|SHOT)\s*(\d+)/i;
+    const sectionPattern = /^\s*#+\s*(SECCI[ÓO]N.*)/i;
 
     for (const line of lines) {
-      if (panoPattern.test(line)) {
+      const sectionMatch = line.match(sectionPattern);
+      if (sectionMatch) {
+        currentSection = sectionMatch[1].trim();
+        continue;
+      }
+
+      if (shotPattern.test(line)) {
         if (currentChunk.trim()) {
           chunks.push(currentChunk.trim());
         }
         currentChunk = line + "\n";
+        if (currentSection) {
+          currentChunk = `// ${currentSection}\n` + currentChunk;
+        }
       } else {
         currentChunk += line + "\n";
       }
@@ -45,46 +56,50 @@ export const ProductionAgent = {
       chunks.push(currentChunk.trim());
     }
 
-    // Merge everything before the FIRST PLANO into the first PLANO chunk
-    const firstPanoIndex = chunks.findIndex(c => panoPattern.test(c));
-    if (firstPanoIndex > 0) {
-      const intro = chunks.slice(0, firstPanoIndex).join('\n\n');
-      chunks = chunks.slice(firstPanoIndex);
-      chunks[0] = intro + "\n\n" + chunks[0];
-    }
+    // Process each chunk into a Scene object
+    return chunks
+      .filter(chunk => shotPattern.test(chunk))
+      .map((chunk, index) => {
+        const cleanChunk = chunk.trim();
+        const firstLine = cleanChunk.split('\n').find(l => shotPattern.test(l)) || '';
+        const numMatch = firstLine.match(shotPattern);
+        const shotNumber = numMatch ? parseInt(numMatch[1], 10) : index + 1;
 
-    return chunks.map((chunk, index) => {
-      const cleanChunk = chunk.trim();
-      
-      const getField = (keys: string[]) => {
-        for (const key of keys) {
-          // Flexible field extraction even with list markers and bold text
-          const regex = new RegExp(`[\\*\\-\\s]*\\*\\*${key}:?\\*\\*\\s*(.*?)(?=\\n|\\s*\\*\\*|$)`, 'is');
-          const match = cleanChunk.match(regex);
-          if (match) return ProductionAgent.cleanText(match[1]);
-        }
-        return null;
-      };
+        const getField = (keys: string[]) => {
+          for (const key of keys) {
+            // Match "Field: Content" or "**Field**: Content"
+            const regex = new RegExp(`(?:[\\*\\-\\s]*\\*?${key}\\*?:?\\s*)(.*?)(?=\\n|\\s*[\\*\\-]*\\s*\\*?\\w+\\*?:|$)`, 'is');
+            const match = cleanChunk.match(regex);
+            if (match && match[1].trim()) return ProductionAgent.cleanText(match[1]);
+          }
+          return null;
+        };
 
-      const visual = getField(['Visual', 'Descripción', 'Visual Instruction', 'Instruction']);
-      const optics = getField(['Óptica', 'Cámara', 'Óptica & Sensor', 'Lente']);
-      const lighting = getField(['Luz', 'Iluminación', 'Iluminación & Atmósfera', 'Atmósfera']);
+        const visual = getField(['Visual', 'Descripción', 'Visual Instruction', 'Visual Prompt', 'Video Core']);
+        const optics = getField(['Óptica', 'Cámara', 'Lente', 'Sensor']);
+        const lighting = getField(['Luz', 'Iluminación', 'Atmósfera', 'Ambiente']);
+        const vfx = getField(['VFX', 'Post', 'Efectos', 'Post-producción']);
+        const sound = getField(['Sonido', 'Sound Design', 'Audio', 'Música']);
+        const action = getField(['Acción', 'Cinematic Action', 'Dinámica', 'Movimiento']);
 
-      // Default text extraction: everything after the header line if "Visual" is missing
-      let imageText = visual || cleanChunk.replace(panoPattern, '').split('\n').filter(l => l.trim()).join(' ');
-
-      return {
-        id: crypto.randomUUID(),
-        imageText: ProductionAgent.cleanText(imageText),
-        videoText: '',
-        mode: 'image',
-        asset: null,
-        groupId: workspaceId,
-        theme: theme,
-        optics: optics || 'Detectar en guion',
-        physics: lighting || 'Normal',
-        sceneNumber: index + 1
-      };
-    });
+        // Format the final prompt text
+        let finalPrompt = visual || cleanChunk.split('\n').filter(l => !shotPattern.test(l) && !l.startsWith('//')).join(' ').trim();
+        
+        return {
+          id: crypto.randomUUID(),
+          imageText: ProductionAgent.cleanText(finalPrompt),
+          videoText: ProductionAgent.cleanText(chunk), // Keep full context for video mode
+          mode: 'image',
+          asset: null,
+          groupId: workspaceId,
+          theme: theme,
+          optics: optics || 'Detectar...',
+          physics: lighting || 'Cinematic',
+          vfx: vfx || 'No especificado',
+          sound: sound || 'Ambiente',
+          action: action || 'No especificado',
+          sceneNumber: shotNumber
+        };
+      });
   }
 };
