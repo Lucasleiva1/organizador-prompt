@@ -544,15 +544,12 @@ export const WorkspaceInstance = ({
           </div>
 
           <div className="h-8 w-px bg-[#222]" />
-          
           <button 
             onClick={() => setShowDeleteConfirm(true)}
-          <button 
-            onClick={exportToPDF}
-            className="p-2.5 text-[#D4AF37]/60 hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-xl transition-all flex items-center justify-center border border-transparent hover:border-[#D4AF37]/20"
-            title="Exportar Planos a PDF"
+            className="p-2.5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-xl transition-all"
+            title="Eliminar Sección"
           >
-            <FileDown size={18} />
+            <Trash2 size={24} />
           </button>
         </div>
       </div>
