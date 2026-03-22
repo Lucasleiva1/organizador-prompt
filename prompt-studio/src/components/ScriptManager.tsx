@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useRef } from "react";
-import { motion, Reorder, useDragControls } from "framer-motion";
-import { X, Plus, Trash2, GripHorizontal, GripVertical, Upload, FileDown, Folder, Edit3, Copy, Check } from "lucide-react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { Reorder, motion, AnimatePresence, useDragControls } from "framer-motion";
+import { X, Plus, Trash2, GripHorizontal, GripVertical, Upload, FileDown, Folder, Edit3, Copy, Check, Save, FolderOpen } from "lucide-react";
 import { Script } from "../types";
+import { SceneCard } from "./SceneCard";
 import jsPDF from "jspdf";
 import { documentDir, join } from "@tauri-apps/api/path";
-import { writeFile, mkdir } from "@tauri-apps/plugin-fs";
+import { writeFile, mkdir, writeTextFile } from "@tauri-apps/plugin-fs";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { save } from "@tauri-apps/plugin-dialog";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configuración del worker de PDF.js
@@ -223,7 +224,7 @@ export default function ScriptManager({ scripts, saveScripts, onClose }: ScriptM
       const defaultFileName = `${script.title.replace(/\s+/g, '_') || 'Sin_titulo'}_${Date.now()}.pdf`;
       const defaultPath = await join(targetFolder, defaultFileName);
 
-      const fullPath = await save({
+      const fullPath = await saveDialog({
         title: "Guardar Guión PDF",
         defaultPath: defaultPath,
         filters: [{ name: "PDF", extensions: ["pdf"] }]
@@ -237,6 +238,53 @@ export default function ScriptManager({ scripts, saveScripts, onClose }: ScriptM
       console.error("Error exporting PDF:", err);
       alert("Error al exportar el PDF.");
     }
+  };
+
+  const exportScriptsJSON = async () => {
+    try {
+      const suggestedName = `scripts_${new Date().toISOString().split('T')[0]}.json`;
+      const fullPath = await saveDialog({
+        title: "Exportar Guiones (JSON)",
+        defaultPath: suggestedName,
+        filters: [{
+          name: 'JSON File',
+          extensions: ['json']
+        }]
+      });
+
+      if (!fullPath) return; 
+
+      await writeTextFile(fullPath, JSON.stringify(scripts, null, 2));
+      alert(`Guiones exportados con éxito a:\n${fullPath}`);
+    } catch (err) {
+      console.error("Error exporting scripts:", err);
+      alert("Error al exportar los guiones.");
+    }
+  };
+
+  const importScriptsJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const imported = JSON.parse(reader.result as string);
+        if (Array.isArray(imported)) {
+          const newScripts = imported.map((s: Script) => ({
+            ...s,
+            id: crypto.randomUUID()
+          }));
+          saveScripts([...scripts, ...newScripts]);
+          alert(`Importados ${newScripts.length} guiones.`);
+        }
+      } catch (err) {
+        console.error("Error importing scripts:", err);
+        alert("Error al cargar el archivo JSON.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -336,8 +384,28 @@ export default function ScriptManager({ scripts, saveScripts, onClose }: ScriptM
           >
             <Plus size={16} /> NUEVO GUION
           </button>
+
+          <div className="flex items-center gap-1.5 border-l border-white/5 pl-3">
+             <button 
+               onClick={exportScriptsJSON}
+               className="p-2.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-2xl hover:bg-violet-500/20 transition-all"
+               title="Exportar Guiones (JSON)"
+             >
+               <Save size={18} />
+             </button>
+
+             <label className="p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-2xl hover:bg-blue-500/20 transition-all cursor-pointer">
+                <FolderOpen size={18} />
+                <input 
+                  type="file" 
+                  accept=".json" 
+                  className="hidden" 
+                  onChange={importScriptsJSON} 
+                />
+             </label>
+          </div>
           
-          <div className="w-px h-8 bg-white/5 mx-2" />
+          <div className="w-px h-8 bg-white/5 mx-1" />
           
           <button 
             onClick={onClose}

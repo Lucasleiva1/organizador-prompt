@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
-import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, FileDown } from "lucide-react";
+import { FolderPlus, Upload, FileText, Image as ImageIcon, Clapperboard, Hash, Plus, Sparkles, Trash2, ChevronDown, ChevronRight, LayoutGrid, LayoutList, View, FileDown, Save, FolderOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Scene, Workspace } from "../types";
 import { parseMarkdownTable, parseSimpleText } from "../utils/parser";
@@ -9,8 +9,8 @@ import { AssetManager } from "../utils/AssetManager";
 import { ProductionAgent } from "../utils/ProductionAgent";
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
-import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
-import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile, mkdir, writeTextFile } from '@tauri-apps/plugin-fs';
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 interface WorkspaceInstanceProps {
   index: number;
   workspace: Workspace;
@@ -219,6 +219,60 @@ export const WorkspaceInstance = ({
     e.target.value = "";
   };
 
+  const exportSection = async () => {
+    try {
+      const data = {
+        workspace,
+        scenes: scenes.filter(s => (s.groupId || 'default') === workspace.id)
+      };
+      
+      const suggestedName = `workspace_${workspace.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+      const fullPath = await saveDialog({
+        title: "Exportar Sección (JSON)",
+        defaultPath: suggestedName,
+        filters: [{
+          name: 'JSON File',
+          extensions: ['json']
+        }]
+      });
+
+      if (!fullPath) return; 
+
+      await writeTextFile(fullPath, JSON.stringify(data, null, 2));
+      alert(`Sección exportada con éxito a:\n${fullPath}`);
+    } catch (err) {
+      console.error("Error exporting section:", err);
+      alert("Error al exportar la sección.");
+    }
+  };
+
+  const loadSection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        if (data.scenes && Array.isArray(data.scenes)) {
+          // Add imported scenes with new IDs to current workspace
+          const scenesToImport = data.scenes.map((s: Scene) => ({
+            ...s,
+            id: crypto.randomUUID(),
+            groupId: workspace.id
+          }));
+          saveScenes([...scenes, ...scenesToImport]);
+          alert(`Importados ${scenesToImport.length} planos.`);
+        }
+      } catch (err) {
+        console.error("Error importing section:", err);
+        alert("Error al cargar el archivo JSON.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     
@@ -369,7 +423,7 @@ export const WorkspaceInstance = ({
       await mkdir(targetFolder, { recursive: true });
 
       const defaultPath = await join(targetFolder, `${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-      const fullPath = await save({
+      const fullPath = await saveDialog({
         title: "Exportar Sección a PDF",
         defaultPath: defaultPath,
         filters: [{ name: "PDF", extensions: ["pdf"] }]
@@ -460,21 +514,39 @@ export const WorkspaceInstance = ({
               <View size={18} />
             </button>
           </div>
-          <button
-            onClick={() => setIsCollapsed(true)}
-            className="p-2.5 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-all flex items-center justify-center"
-            title="Colapsar sección"
-          >
-            <ChevronDown size={18} />
-          </button>
+
+          <div className="flex items-center gap-1.5 border-l border-[#222] pl-3">
+             <button 
+               onClick={exportSection}
+               className="p-2.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-xl hover:bg-violet-500/20 transition-all"
+               title="Exportar Sección (JSON)"
+             >
+               <Save size={18} />
+             </button>
+
+             <label className="p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/20 transition-all cursor-pointer">
+                <FolderOpen size={18} />
+                <input 
+                  type="file" 
+                  accept=".json" 
+                  className="hidden" 
+                  onChange={loadSection} 
+                />
+             </label>
+
+             <button 
+              onClick={exportToPDF}
+              className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/20 transition-all"
+              title="Exportar a PDF"
+            >
+              <FileDown size={18} />
+            </button>
+          </div>
+
+          <div className="h-8 w-px bg-[#222]" />
+          
           <button 
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-2.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all flex items-center justify-center"
-            title="Eliminar Sección"
-          >
-            <Trash2 size={18} />
-          </button>
-          <div className="w-px h-5 bg-[#333] mx-1" />
           <button 
             onClick={exportToPDF}
             className="p-2.5 text-[#D4AF37]/60 hover:text-[#D4AF37] hover:bg-[#D4AF37]/10 rounded-xl transition-all flex items-center justify-center border border-transparent hover:border-[#D4AF37]/20"
