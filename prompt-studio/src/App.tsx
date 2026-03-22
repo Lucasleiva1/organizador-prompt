@@ -520,26 +520,28 @@ export default function App() {
               </div>
             )}
 
+            <div className="w-px h-6 bg-white/5 mx-1" />
+
             {visibility.showSave && (
               <button
                 onClick={saveProject}
-                className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-emerald-500/20 text-emerald-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/15 hover:border-emerald-400/60 hover:shadow-[0_0_18px_rgba(52,211,153,0.35)] hover:text-emerald-300"
-                title="Guardar proyecto como archivo JSON"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                title="Guardar proyecto completo (JSON)"
               >
-                <Save size={13} /> GUARDAR
+                <Save size={14} /> GUARDAR
               </button>
             )}
 
             {visibility.showLoad && (
               <button
                 onClick={loadProject}
-                className="flex items-center gap-2 px-4 py-2 rounded bg-slate-800/40 border border-violet-500/20 text-violet-400 font-bold text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/15 hover:border-violet-400/60 hover:shadow-[0_0_18px_rgba(167,139,250,0.35)] hover:text-violet-300"
-                title="Cargar proyecto desde archivo JSON"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/20 hover:border-violet-500/40 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)]"
+                title="Cargar proyecto completo (JSON)"
               >
-                <FolderOpen size={13} /> CARGAR
+                <FolderOpen size={14} /> CARGAR
               </button>
             )}
-            
+
             <div className="w-px h-6 bg-white/5 mx-1" />
 
             {/* CONFIGURACION (RESOLUCIONES) */}

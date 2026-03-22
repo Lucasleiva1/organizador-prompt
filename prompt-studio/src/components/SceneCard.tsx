@@ -208,20 +208,24 @@ export const SceneCard = ({
                  {scene.asset ? (
                    <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
                  ) : (
-                    <div onClick={() => fileInputRefFront.current?.click()} className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
+                    <div className="w-full h-full flex items-center justify-center hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
                        <Upload size={14} className="text-[#D4AF37] opacity-50" />
                     </div>
                  )}
                  <input type="file" ref={fileInputRefFront} className="hidden" accept="image/*" onChange={handleFileSelect} />
                  
                  {/* ACCIONES SOBRE IMAGEN - ALWAYS AVAILABLE ON HOVER */}
-                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-start justify-end p-1.5 gap-1.5">
-                    <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
-                    {scene.asset && (
-                      <>
-                        <button onClick={() => setIsFrontExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col justify-between p-1.5 pointer-events-none">
+                    <div className="flex justify-end gap-1.5 pointer-events-auto">
+                      <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
+                      {scene.asset && (
                         <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
-                      </>
+                      )}
+                    </div>
+                    {scene.asset && (
+                      <div className="flex justify-start pointer-events-auto">
+                        <button onClick={() => setIsFrontExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                      </div>
                     )}
                  </div>
                </div>
@@ -374,17 +378,21 @@ export const SceneCard = ({
                     {scene.asset ? (
                       <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
                     ) : (
-                       <div onClick={() => fileInputRefBack.current?.click()} className="w-full h-full flex items-center justify-center cursor-pointer hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
+                       <div className="w-full h-full flex items-center justify-center hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
                           <Upload size={14} className="text-violet-400 opacity-50" />
                        </div>
                     )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex items-start justify-end p-1.5 gap-1.5">
-                       <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
-                       {scene.asset && (
-                         <>
-                           <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex flex-col justify-between p-1.5 pointer-events-none">
+                       <div className="flex justify-end gap-1.5 pointer-events-auto">
+                         <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
+                         {scene.asset && (
                            <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
-                         </>
+                         )}
+                       </div>
+                       {scene.asset && (
+                         <div className="flex justify-start pointer-events-auto">
+                            <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                         </div>
                        )}
                     </div>
                  </div>

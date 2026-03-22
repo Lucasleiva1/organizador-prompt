@@ -223,7 +223,7 @@ export const WorkspaceInstance = ({
     try {
       const data = {
         workspace,
-        scenes: scenes.filter(s => (s.groupId || 'default') === workspace.id)
+        scenes: localScenes
       };
       
       const suggestedName = `workspace_${(workspace.name || 'section').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
@@ -246,7 +246,7 @@ export const WorkspaceInstance = ({
     }
   };
 
-  const loadSection = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleJsonImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -516,41 +516,44 @@ export const WorkspaceInstance = ({
           </div>
 
           <div className="flex items-center gap-1.5 border-l border-[#222] pl-3">
-             <button 
-               onClick={exportSection}
-               className="p-2.5 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-xl hover:bg-violet-500/20 transition-all"
-               title="Exportar Sección (JSON)"
-             >
-               <Save size={18} />
-             </button>
+            <button 
+              onClick={exportSection}
+              className="p-2.5 bg-slate-500/10 border border-white/10 text-slate-400 rounded-xl hover:bg-slate-500/20 hover:text-white transition-all"
+              title="Exportar Sección (JSON)"
+            >
+              <Save size={18} />
+            </button>
 
-             <label className="p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl hover:bg-blue-500/20 transition-all cursor-pointer">
-                <FolderOpen size={18} />
-                <input 
-                  type="file" 
-                  accept=".json" 
-                  className="hidden" 
-                  onChange={loadSection} 
-                />
-             </label>
+            <label className="p-2.5 bg-slate-500/10 border border-white/10 text-slate-400 rounded-xl hover:bg-slate-500/20 hover:text-white transition-all cursor-pointer" title="Importar Sección (JSON)">
+              <FolderOpen size={18} />
+              <input 
+                type="file" 
+                accept=".json" 
+                className="hidden" 
+                onChange={handleJsonImport} 
+              />
+            </label>
+          </div>
 
+          <div className="h-8 w-px bg-[#222]" />
+
+          <div className="flex items-center gap-1.5">
              <button 
               onClick={exportToPDF}
-              className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/20 transition-all"
+              className="p-2.5 bg-slate-500/10 border border-white/10 text-slate-400 rounded-xl hover:bg-slate-500/20 hover:text-white transition-all"
               title="Exportar a PDF"
             >
               <FileDown size={18} />
             </button>
-          </div>
 
-          <div className="h-8 w-px bg-[#222]" />
-          <button 
-            onClick={() => setShowDeleteConfirm(true)}
-            className="p-2.5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-xl transition-all"
-            title="Eliminar Sección"
-          >
-            <Trash2 size={24} />
-          </button>
+            <button 
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2.5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-xl transition-all"
+              title="Eliminar Sección"
+            >
+              <Trash2 size={24} />
+            </button>
+          </div>
         </div>
       </div>
 

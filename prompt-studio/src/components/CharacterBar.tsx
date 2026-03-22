@@ -299,7 +299,7 @@ const CharacterThumb = ({ character, isSelected, onSelect, onDelete }: Character
       
       {/* Actions Overlay */}
       {!isSelected && (
-        <div className="absolute -top-2 -right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all z-10">
+        <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-10 p-1 rounded-full">
           <button 
             onClick={handleCopy}
             className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-xl transition-all hover:scale-110 ${copied ? "bg-green-500" : "bg-slate-700/90 hover:bg-slate-600"}`}
