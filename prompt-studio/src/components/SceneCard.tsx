@@ -216,12 +216,12 @@ export const SceneCard = ({
                  <input type="file" ref={fileInputRefFront} className="hidden" accept="image/*" onChange={handleFileSelect} />
                  
                  {/* ACCIONES SOBRE IMAGEN - ALWAYS AVAILABLE ON HOVER */}
-                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button onClick={() => fileInputRefFront.current?.click()} className="p-1.5 bg-black/80 rounded-lg text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl"><Upload size={14}/></button>
+                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-start justify-end p-1.5 gap-1.5">
+                    <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
                     {scene.asset && (
                       <>
-                        <button onClick={() => setIsFrontExpanded(true)} className="p-1.5 bg-black/80 rounded-lg text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl"><Maximize2 size={14}/></button>
-                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1.5 bg-black/80 rounded-lg text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl"><Trash2 size={14}/></button>
+                        <button onClick={() => setIsFrontExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                        <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
                       </>
                     )}
                  </div>
@@ -379,12 +379,12 @@ export const SceneCard = ({
                           <Upload size={14} className="text-violet-400 opacity-50" />
                        </div>
                     )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                       <button onClick={() => fileInputRefBack.current?.click()} className="p-1.5 bg-black/80 rounded-lg text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl"><Upload size={14}/></button>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex items-start justify-end p-1.5 gap-1.5">
+                       <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-emerald-400 border border-emerald-500/20 hover:scale-110 transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
                        {scene.asset && (
                          <>
-                           <button onClick={() => setIsBackExpanded(true)} className="p-1.5 bg-black/80 rounded-lg text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl"><Maximize2 size={14}/></button>
-                           <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1.5 bg-black/80 rounded-lg text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl"><Trash2 size={14}/></button>
+                           <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-cyan-400 border border-cyan-500/20 hover:scale-110 transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                           <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-red-400 border border-red-500/20 hover:scale-110 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
                          </>
                        )}
                     </div>
