@@ -27,7 +27,9 @@ interface ParsedMetadata {
   audio: string;
   dynamics: string;
   vfx: string;
+  vfxDetail: string;
   sound: string;
+  cameraChoreography: string;
 }
 
 // Helper for parsing script text into prompt and metadata
@@ -43,12 +45,13 @@ const parseScriptText = (text: string): ParsedMetadata => {
     return "";
   };
 
-  const optics = getField(['Óptica & Sensor', 'Óptica', 'Cámara', 'Lente']);
+  const optics = getField(['Óptica & Sensor', 'Óptica', 'Cámara', 'Lente', 'Visual Prompt']);
   const lighting = getField(['Iluminación & Atmósfera', 'Iluminación', 'Luz', 'Atmósfera']);
   const sound = getField(['Sound Design', 'Sonido', 'Audio', 'Música & Audio']);
   const vfx = getField(['VFX & Post', 'VFX', 'Post-producción', 'Efectos']);
   const audio = getField(['Audio', 'Música']);
   const dynamics = getField(['Cinematic Action', 'Acción', 'Efecto & Dinámica', 'Dinámica']);
+  const cameraChoreography = getField(['Camera Choreography', 'Movimiento de Cámara', 'Cámara']);
 
   let mainPrompt = "";
   const visualMatch = text.match(/(?:Visual Prompt \(Video Core\)|Visual Instruction|Visual|Descripción):\s*(.*?)(?=\\n|\\*\\*|$)/s);
@@ -67,10 +70,7 @@ const parseScriptText = (text: string): ParsedMetadata => {
       .trim();
   }
   
-  // Ensure the internal PLANO header matches the card index
-  // const shotNumber = sceneIndex + 1; // Removed as requested or handled via UI sync
-
-  return { mainPrompt, metadata, optics, lighting, audio, dynamics, vfx, sound };
+  return { mainPrompt, metadata, optics, lighting, audio, dynamics, vfx: "", sound, cameraChoreography, vfxDetail: vfx };
 };
 
 export const CardAction = ({ icon: Icon, onClick, onDoubleClick, disabled, color, tooltip }: any) => {
@@ -123,7 +123,6 @@ export const SceneCard = ({
   const [copiedFront, setCopiedFront] = useState(false);
   const [copiedBack, setCopiedBack] = useState(false);
   
-
   const fileInputRefFront = useRef<HTMLInputElement>(null);
   const fileInputRefBack = useRef<HTMLInputElement>(null);
   const textareaRefImage = useRef<HTMLTextAreaElement>(null);
@@ -148,10 +147,8 @@ export const SceneCard = ({
       if (scene.asset.startsWith('http') || scene.asset.startsWith('data:') || scene.asset.startsWith('blob:')) {
         setAssetUrl(scene.asset);
       } else if (scene.asset.includes(':/') || scene.asset.includes(':\\') || scene.asset.startsWith('/')) {
-        // Absolute system path (Windows or Unix)
         setAssetUrl(convertFileSrc(scene.asset));
       } else {
-        // App asset (relative filename)
         AssetManager.resolveAssetUrl(scene.asset).then(setAssetUrl);
       }
     } else {
@@ -230,7 +227,6 @@ export const SceneCard = ({
                  )}
                  <input type="file" ref={fileInputRefFront} className="hidden" accept="image/*" onChange={handleFileSelect} />
                  
-                 {/* ACCIONES SOBRE IMAGEN - ALWAYS AVAILABLE ON HOVER */}
                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col justify-between p-1.5 pointer-events-none">
                     <div className="flex justify-end gap-1.5 pointer-events-auto">
                       <button onClick={() => fileInputRefFront.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
@@ -246,7 +242,6 @@ export const SceneCard = ({
                  </div>
                </div>
 
-               {/* FULL CARD IMAGE OVERLAY */}
                <AnimatePresence>
                  {isFrontExpanded && scene.asset && (
                    <motion.div 
@@ -278,16 +273,21 @@ export const SceneCard = ({
                <div className={`relative flex-1 group/textarea min-h-[100px] ${!isEditingImage ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingImage(true)}>
                   <textarea
                     className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingImage ? 'pointer-events-none' : 'focus:border-[#D4AF37]/50'}`}
-                    value={showTranslateImage ? (scene.translatedImageText || "Traduciendo...") : scene.imageText}
+                    value={(showTranslateImage ? (scene.translatedImageText || "Traduciendo...") : scene.imageText).replace(/^(PLANO\s*)\d+/i, `$1${index + 1}`)}
                     onChange={(e) => updateScene(scene.id, showTranslateImage ? { translatedImageText: e.target.value } : { imageText: e.target.value })}
                     onBlur={() => setIsEditingImage(false)}
                     ref={textareaRefImage}
                   />
                   <button 
-                    onClick={() => { 
-                      navigator.clipboard.writeText(parsedFront.mainPrompt); 
-                      setCopiedFront(true);
-                      setTimeout(() => setCopiedFront(false), 2000);
+                    onClick={async () => { 
+                      try {
+                        const textToCopy = parsedFront.mainPrompt || scene.imageText;
+                        await navigator.clipboard.writeText(textToCopy); 
+                        setCopiedFront(true);
+                        setTimeout(() => setCopiedFront(false), 2000);
+                      } catch (err) {
+                        console.error("Failed to copy:", err);
+                      }
                     }}
                     className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222] flex items-center gap-2"
                   >
@@ -333,34 +333,6 @@ export const SceneCard = ({
                       ))}
                     </ul>
                   </div>
-
-                  {isVideo && (
-                    <>
-                      <div className="technical-box">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Zap size={12} className="text-[#D4AF37]" />
-                          <span className="text-[9px] text-[#D4AF37] font-black uppercase tracking-widest">VFX & POST</span>
-                        </div>
-                        <ul className="text-[10px] text-slate-400 space-y-1 list-none">
-                          {(parsedFront.vfx || scene.vfx || 'De serie').split(',').map((v: string, i: number) => (
-                            <li key={i} className="flex gap-2"><span className="text-[#D4AF37]/40">•</span> {v.trim()}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="technical-box">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Music size={12} className="text-[#D4AF37]" />
-                          <span className="text-[9px] text-[#D4AF37] font-black uppercase tracking-widest">SOUND DESIGN</span>
-                        </div>
-                        <ul className="text-[10px] text-slate-400 space-y-1 list-none">
-                          {(parsedFront.sound || scene.sound || 'Ambiente').split(',').map((s: string, i: number) => (
-                            <li key={i} className="flex gap-2"><span className="text-[#D4AF37]/40">•</span> {s.trim()}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </>
-                  )}
                </div>
             </div>
           </div>
@@ -386,124 +358,148 @@ export const SceneCard = ({
                 <div className="flex gap-1 bg-black/60 p-1 rounded-lg border border-white/5 items-center">
                    <CardAction icon={Plus} onClick={() => duplicateScene(scene.id)} color="gold" tooltip="Nuevo Plano" />
                    <CardAction icon={ArrowRightLeft} onClick={handleFlip} color="violet" tooltip="Cambiar a Imagen" />
-                    <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
-                 </div>
-                 <input type="file" ref={fileInputRefBack} className="hidden" accept="image/*" onChange={handleFileSelect} />
-             </div>
-           </header>
- 
-           <AnimatePresence>
-              {isBackExpanded && scene.asset && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="absolute inset-0 z-50 bg-[#050505] rounded-xl flex flex-col p-4 border-2 border-violet-500/30 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
-                >
-                  <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-2">
-                     <div className="text-[10px] text-violet-400 font-black uppercase tracking-[.3em]">PREVISUALIZACIÓN DE VIDEO</div>
-                     <button 
-                       onClick={() => setIsBackExpanded(false)}
-                       className="p-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-lg hover:bg-violet-500/20 transition-all"
-                     >
-                       <Minimize2 size={14} />
-                     </button>
-                  </div>
-                  <div className="flex-1 relative overflow-hidden rounded-lg bg-black/40 border border-white/5">
-                     <img 
-                       src={assetUrl} 
-                       alt="Expanded View" 
-                       className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(139,92,246,0.1)]"
-                     />
-                  </div>
-                </motion.div>
-              )}
-           </AnimatePresence>
- 
-           <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4">
-             <div className="flex-[1.5] flex flex-col min-w-0">
-                 
-                 <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-20 group/img-back`}>
-                    {scene.asset ? (
-                      <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
-                    ) : (
-                       <div className="w-full h-full flex items-center justify-center hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
-                          <Upload size={14} className="text-violet-400 opacity-50" />
-                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex flex-col justify-between p-1.5 pointer-events-none">
-                       <div className="flex justify-end gap-1.5 pointer-events-auto">
-                         <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
-                         {scene.asset && (
-                           <button onClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar"><Trash2 size={12}/></button>
-                         )}
-                       </div>
-                       {scene.asset && (
-                         <div className="flex justify-start pointer-events-auto">
-                            <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
-                         </div>
-                       )}
-                    </div>
-                 </div>
+                   <CardAction icon={Trash} onDoubleClick={() => deleteScene(scene.id)} color="red" tooltip="Borrar (2x click)" />
+                </div>
+            </div>
+          </header>
 
-                 <div className={`relative flex-1 group/textarea min-h-[120px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
-                    <textarea
-                      className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingVideo ? 'pointer-events-none' : 'focus:border-violet-500/50'}`}
-                      value={(showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText).replace(/^(###\s*PLANO\s*)\d+/i, `$1${index + 1}`)}
-                      onChange={(e) => updateScene(scene.id, showTranslateVideo ? { translatedVideoText: e.target.value } : { videoText: e.target.value })}
-                      onBlur={() => setIsEditingVideo(false)}
-                      ref={textareaRefVideo}
-                    />
-                    <button 
-                      onClick={() => { 
-                        navigator.clipboard.writeText(parsedBack.mainPrompt); 
+          <div className="flex flex-1 min-h-0 bg-[#0a0a0a] rounded-lg p-3 border border-[#222] gap-4 overflow-hidden">
+            <div className="flex-[1.5] flex flex-col min-w-0">
+               <div className={`relative shrink-0 mb-3 rounded-md overflow-hidden border border-[#222] transition-all bg-[#0a0a0a] h-24 group/img-back`}>
+                 {scene.asset ? (
+                   <img src={assetUrl} alt="Ref" className="w-full h-full object-contain" />
+                 ) : (
+                    <div className="w-full h-full flex items-center justify-center hover:bg-[#111] transition-colors border-2 border-dashed border-[#222]">
+                       <Upload size={14} className="text-violet-400 opacity-50" />
+                    </div>
+                 )}
+                 <input type="file" ref={fileInputRefBack} className="hidden" accept="image/*" onChange={handleFileSelect} />
+                 
+                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img-back:opacity-100 transition-opacity flex flex-col justify-between p-1.5 pointer-events-none">
+                    <div className="flex justify-end gap-1.5 pointer-events-auto">
+                      <button onClick={() => fileInputRefBack.current?.click()} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Subir Imagen"><Upload size={12}/></button>
+                      {scene.asset && (
+                        <button onDoubleClick={() => updateScene(scene.id, { asset: undefined })} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-red-400 transition-all shadow-xl" title="Borrar Imagen (2x click)"><Trash2 size={12}/></button>
+                      )}
+                    </div>
+                    {scene.asset && (
+                      <div className="flex justify-start pointer-events-auto">
+                        <button onClick={() => setIsBackExpanded(true)} className="p-1 px-1.5 bg-black/80 rounded text-slate-400 border border-white/10 hover:text-white transition-all shadow-xl" title="Expandir"><Maximize2 size={12}/></button>
+                      </div>
+                    )}
+                 </div>
+               </div>
+
+               <AnimatePresence>
+                 {isBackExpanded && scene.asset && (
+                   <motion.div 
+                     initial={{ opacity: 0, scale: 0.9 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     exit={{ opacity: 0, scale: 0.9 }}
+                     className="absolute inset-0 z-50 bg-[#050505] rounded-xl flex flex-col p-4 border-2 border-violet-500/30 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+                   >
+                     <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-2">
+                        <div className="text-[10px] text-violet-400 font-black uppercase tracking-[.3em]">PREVISUALIZACIÓN DE VIDEO</div>
+                        <button 
+                          onClick={() => setIsBackExpanded(false)}
+                          className="p-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-lg hover:bg-violet-500/20 transition-all"
+                        >
+                          <Minimize2 size={14} />
+                        </button>
+                     </div>
+                     <div className="flex-1 relative overflow-hidden rounded-lg bg-black/40 border border-white/5">
+                        <img 
+                          src={assetUrl} 
+                          alt="Expanded View" 
+                          className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(139,92,246,0.1)]"
+                        />
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+               
+               <div className={`relative flex-1 group/textarea min-h-[100px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
+                  <textarea
+                    className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingVideo ? 'pointer-events-none' : 'focus:border-violet-500/50'}`}
+                    value={showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText}
+                    onChange={(e) => updateScene(scene.id, showTranslateVideo ? { translatedVideoText: e.target.value } : { videoText: e.target.value })}
+                    onBlur={() => setIsEditingVideo(false)}
+                    ref={textareaRefVideo}
+                  />
+                  <button 
+                    onClick={async () => { 
+                      try {
+                        const textToCopy = parsedBack.mainPrompt || scene.videoText;
+                        await navigator.clipboard.writeText(textToCopy); 
                         setCopiedBack(true);
                         setTimeout(() => setCopiedBack(false), 2000);
-                      }}
-                      className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222] flex items-center gap-2"
-                    >
-                      <AnimatePresence>
-                        {copiedBack && (
-                          <motion.span 
-                            initial={{ opacity: 0, x: 5 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 5 }}
-                            className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
-                          >
-                            Copiado
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-                      <Copy size={12} className="text-violet-400" />
-                    </button>
-                </div>
-             </div>
-             
-             <div className="flex-1 border-l border-[#222] pl-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0">
-                <div className="technical-box">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Camera size={12} className="text-violet-400" />
-                    <span className="text-[9px] text-violet-400 font-bold uppercase tracking-widest">ÓPTICA & SENSOR</span>
-                  </div>
-                  <ul className="text-[10px] text-slate-400 space-y-1 list-none">
-                      {(parsedBack.optics || scene.optics || 'Configurar...').split(',').map((o: string, i: number) => (
+                      } catch (err) {
+                        console.error("Failed to copy:", err);
+                      }
+                    }}
+                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover/textarea:opacity-100 transition-opacity bg-black border border-[#222] rounded hover:bg-[#222] flex items-center gap-2"
+                  >
+                    <AnimatePresence>
+                      {copiedBack && (
+                        <motion.span 
+                          initial={{ opacity: 0, x: 5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 5 }}
+                          className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                        >
+                          Copiado
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                    <Copy size={12} className="text-violet-400" />
+                  </button>
+               </div>
+            </div>
+
+            <div className="flex-1 border-l border-[#222] pl-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0 bg-[#0c0c0c]/50">
+               <div className="space-y-4 pt-1">
+                  <div className="technical-box">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Camera size={12} className="text-violet-400" />
+                      <span className="text-[9px] text-violet-400 font-black uppercase tracking-widest">CÁMARA & MOV.</span>
+                    </div>
+                    <ul className="text-[10px] text-slate-400 space-y-1 list-none">
+                      {(parsedBack.cameraChoreography || scene.optics || 'Configurar...').split(',').map((o: string, i: number) => (
                         <li key={i} className="flex gap-2"><span className="text-violet-400/40">•</span> {o.trim()}</li>
                       ))}
-                  </ul>
-                </div>
-                
-                <div className="technical-box">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Zap size={12} className="text-violet-400" />
-                    <span className="text-[9px] text-violet-400 font-bold uppercase tracking-widest">DINÁMICA</span>
+                    </ul>
                   </div>
-                  <ul className="text-[10px] text-slate-400 space-y-1 list-none">
-                      {(parsedBack.lighting || scene.physics || 'Flow cinematic').split(',').map((l: string, i: number) => (
+
+                  <div className="technical-box">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Zap size={12} className="text-violet-400" />
+                      <span className="text-[9px] text-violet-400 font-black uppercase tracking-widest">ACCIÓN / VFX</span>
+                    </div>
+                    <ul className="text-[10px] text-slate-400 space-y-1 list-none">
+                      {((parsedBack.dynamics || parsedBack.vfx) || (scene.physics || 'Cinemática')).split(',').map((l: string, i: number) => (
                         <li key={i} className="flex gap-2"><span className="text-violet-400/40">•</span> {l.trim()}</li>
                       ))}
-                  </ul>
-                </div>
-             </div>
+                      {parsedBack.vfxDetail && (
+                        <li className="flex gap-2 border-t border-white/5 pt-1 mt-1 opacity-80 italic">
+                          <span className="text-violet-400/40">+</span> {parsedBack.vfxDetail.trim()}
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <div className="technical-box">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Music size={12} className="text-violet-400" />
+                      <span className="text-[9px] text-violet-400 font-black uppercase tracking-widest">ATMÓSFERA SONORA</span>
+                    </div>
+                    <ul className="text-[10px] text-slate-400 space-y-1 list-none">
+                      {(parsedBack.sound || 'Ambiente sordo').split(',').map((s: string, i: number) => (
+                        <li key={i} className="flex gap-2"><span className="text-violet-400/40">•</span> {s.trim()}</li>
+                      ))}
+                    </ul>
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
       </motion.div>

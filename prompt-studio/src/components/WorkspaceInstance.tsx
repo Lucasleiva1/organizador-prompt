@@ -10,6 +10,7 @@ import { ProductionAgent } from "../utils/ProductionAgent";
 import jsPDF from 'jspdf';
 import { documentDir, join } from '@tauri-apps/api/path';
 import { writeFile, mkdir, writeTextFile, readDir } from '@tauri-apps/plugin-fs';
+import { invoke } from '@tauri-apps/api/core';
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 interface WorkspaceInstanceProps {
   index: number;
@@ -549,6 +550,21 @@ export const WorkspaceInstance = ({
     }
   };
 
+  const openProductionFolder = async () => {
+    try {
+      const docs = await documentDir();
+      const folderPath = await join(docs, "Prompt Studio", "images-storyboard", workspace.name || "Sin_Nombre");
+      
+      await mkdir(folderPath, { recursive: true });
+      console.log("Invocando comando Rust open_folder:", folderPath);
+      // Usamos nuestro comando personalizado de Rust para bypass de plugins
+      await invoke('open_folder', { path: folderPath });
+    } catch (err) {
+      console.error("Error opening production folder:", err);
+      alert("No se pudo abrir la carpeta del proyecto.");
+    }
+  };
+
   // Golden theme styling applied at boundary
   const containerClasses = workspace.theme === 'golden' 
     ? 'bg-amber-500/5 !border-amber-500/20 p-6 rounded-[2rem] border-[3px] border-dashed shadow-[0_0_50px_rgba(245,158,11,0.05)]' 
@@ -589,12 +605,21 @@ export const WorkspaceInstance = ({
             <span className="text-emerald-500 font-semibold tracking-tighter text-sm">SECCIÓN #{index + 1}</span>
           </div>
           <div className="h-8 w-px bg-[#222]" />
-          <input 
-            value={workspace.name || ""} 
-            onChange={(e) => updateWorkspaceName(workspace.id, e.target.value)}
-            placeholder="Nombre de la sección (opcional)..."
-            className="bg-transparent border-none outline-none text-slate-300 font-semibold text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
-          />
+          <div className="flex items-center gap-2">
+            <input 
+              value={workspace.name || ""} 
+              onChange={(e) => updateWorkspaceName(workspace.id, e.target.value)}
+              placeholder="Nombre de la sección (opcional)..."
+              className="bg-transparent border-none outline-none text-slate-300 font-semibold text-sm placeholder:text-slate-600 focus:ring-0 w-64 uppercase tracking-wider"
+            />
+            <button 
+              onClick={openProductionFolder}
+              className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white rounded-lg border border-white/5 transition-all group/folder"
+              title="Abrir carpeta de archivos"
+            >
+              <FolderOpen size={16} className="group-hover/folder:scale-110 transition-transform" />
+            </button>
+          </div>
           <button 
             onClick={syncProjectAssets}
             className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl hover:bg-emerald-500/20 transition-all flex items-center gap-2 group/sync"

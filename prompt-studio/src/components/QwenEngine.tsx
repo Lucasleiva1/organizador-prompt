@@ -12,7 +12,9 @@ import {
   View,
   Maximize2,
   X,
-  Sparkles
+  Sparkles,
+  Database,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
@@ -215,11 +217,18 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 
       setProgress({ current: 0, total: finalChunks.length });
       
-      const systemPrompt = `Actúa como un storyboarder experto. REGLAS: 
-      1. Genera un objeto JSON.
-      2. El campo 'description' (Acción) DEBE integrar toda la información técnica: [Encuadre] + Acción + Cámara + Iluminación. 
-      3. Mantén 'optics' (Cámara) y 'physics' (Efecto) como campos separados solo para referencia visual.
-      Salida: SOLO JSON {}`.trim();
+      const systemPrompt = `Actúa como un Director de Fotografía experto en IA de video.
+Genera un objeto JSON para un plano cinematográfico.
+El campo 'description' DEBE contener exactamente esta estructura:
+PLANO # (Panel #): Título
+- Visual Prompt (Video Core): [Detalle visual macro/micro]
+- Cinematic Action: [Acción de personajes/elementos]
+- Camera Choreography: [Movimientos técnicos de cámara]
+- VFX & Post: [Efectos y estilo óptico]
+- Sound Design: [Atmósfera sonora]
+
+Campos requeridos en el JSON: 'scene' (número), 'description' (el bloque anterior completo), 'optics' (resumen de cámara), 'physics' (VFX/Estilo), 'timing' (duración).
+Salida: SOLO JSON {}`.trim();
 
       const allPanels: QwenPanel[] = [];
 
@@ -510,6 +519,56 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     }
   };
 
+  const saveStoryboardJSON = async () => {
+    if (panels.length === 0) return;
+    try {
+      const filePath = await saveDialog({
+        title: "Guardar Datos Storyboard (JSON)",
+        defaultPath: `storyboard_data_${Date.now()}.json`,
+        filters: [{ name: "JSON", extensions: ["json"] }]
+      });
+      if (!filePath) return;
+      
+      const data = JSON.stringify({
+        projectName,
+        panels,
+        timestamp: new Date().toISOString()
+      }, null, 2);
+      
+      await writeFile(filePath, new TextEncoder().encode(data));
+      alert("Configuración del Storyboard guardada con éxito.");
+    } catch (e) {
+      console.error("Error guardando JSON:", e);
+      alert("No se pudo guardar el archivo JSON.");
+    }
+  };
+
+  const loadStoryboardJSON = async () => {
+    try {
+      const filePath = await openFileDialog({
+        title: "Cargar Datos Storyboard (JSON)",
+        multiple: false,
+        filters: [{ name: "JSON", extensions: ["json"] }]
+      });
+      if (!filePath || typeof filePath !== 'string') return;
+      
+      const content = await readFile(filePath);
+      const text = new TextDecoder().decode(content);
+      const data = JSON.parse(text);
+      
+      if (data.panels && Array.isArray(data.panels)) {
+        if (data.projectName) setProjectName(data.projectName);
+        setPanels(data.panels);
+        alert("Storyboard cargado correctamente.");
+      } else {
+        alert("El archivo no tiene un formato de Storyboard válido.");
+      }
+    } catch (e) {
+      console.error("Error cargando JSON:", e);
+      alert("Error al parsear el archivo JSON.");
+    }
+  };
+
   const handleAddToWorkspace = () => {
     if (onAddGeneratedScenes && panels.length > 0) {
       onAddGeneratedScenes(panels);
@@ -614,6 +673,29 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
               <FileDown size={18} className="group-hover/export:-translate-y-0.5 transition-transform duration-300" />
               <span className="text-[10px] uppercase font-bold tracking-widest">Exportar PDF</span>
             </button>
+
+            <div className="w-px h-8 bg-white/5 mx-2" />
+
+            {/* JSON Actions */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={saveStoryboardJSON}
+                disabled={panels.length === 0}
+                className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-violet-500/10 border border-[#333] hover:border-violet-500/30 text-slate-400 hover:text-violet-400 px-5 py-2.5 rounded font-bold transition-all disabled:opacity-20"
+                title="Guardar Datos Estructurados"
+              >
+                <Database size={16} />
+                <span className="text-[10px] uppercase font-bold tracking-widest">Guardar JSON</span>
+              </button>
+              <button 
+                onClick={loadStoryboardJSON}
+                className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-emerald-500/10 border border-[#333] hover:border-emerald-500/30 text-slate-400 hover:text-emerald-400 px-5 py-2.5 rounded font-bold transition-all"
+                title="Cargar Datos Estructurados"
+              >
+                <Upload size={16} />
+                <span className="text-[10px] uppercase font-bold tracking-widest">Cargar JSON</span>
+              </button>
+            </div>
           </div>
         </div>
 
