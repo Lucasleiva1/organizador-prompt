@@ -421,7 +421,7 @@ export const SceneCard = ({
                <div className={`relative flex-1 group/textarea min-h-[100px] ${!isEditingVideo ? 'cursor-text' : ''}`} onDoubleClick={() => setIsEditingVideo(true)}>
                   <textarea
                     className={`w-full h-full bg-[#111] border border-[#222] rounded p-3 text-xs leading-relaxed text-slate-300 outline-none resize-none custom-scrollbar ${!isEditingVideo ? 'pointer-events-none' : 'focus:border-violet-500/50'}`}
-                    value={showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText}
+                    value={(showTranslateVideo ? (scene.translatedVideoText || "Traduciendo...") : scene.videoText).replace(/^(PLANO\s*)\d+/i, `$1${index + 1}`)}
                     onChange={(e) => updateScene(scene.id, showTranslateVideo ? { translatedVideoText: e.target.value } : { videoText: e.target.value })}
                     onBlur={() => setIsEditingVideo(false)}
                     ref={textareaRefVideo}

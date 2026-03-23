@@ -29,7 +29,7 @@ export const ProductionAgent = {
     let currentChunk = "";
     let currentSection = "";
     
-    // Pattern for shot headers: PLANO 1, PANEL 2, etc.
+    // Pattern for shot headers: PLANO 1, PANEL 2, etc. (Supports 10+)
     const shotPattern = /^\s*(?:[\*\-\+]\s*)?(?:\[cite_start\])?\s*\*?\*?(?:PLANO|PANEL|ESCENA|SCENE|SHOT)\s*(\d+)/i;
     const sectionPattern = /^\s*#+\s*(SECCI[ÓO]N.*)/i;
 
@@ -104,10 +104,6 @@ export const ProductionAgent = {
   },
 
   /**
-   * IA-Powered scanning/splitting of technical text.
-   * This uses the local Ollama model to scan a block of text and return it split by scene.
-   */
-  /**
    * IA-Powered scanning/splitting of technical text with PROGRESS support.
    */
   scanAndSplitTechnicalText: async (
@@ -116,7 +112,7 @@ export const ProductionAgent = {
   ): Promise<any[]> => {
     console.log("IA Scaneando texto técnico incrementalmente...");
     
-    // 1. Identificar bloques de planos (Regex para PLANO X, SHOT X, ESCENA X)
+    // 1. Identificar bloques de planos (Regex para PLANO X, SHOT X, ESCENA X) - Supports 10+
     const segments = rawText.split(/(?=PLANO|SHOT|ESCENA|SCENE|Panel \d+)/i).filter(s => s.trim().length > 5);
     const total = segments.length;
     const allResults: any[] = [];
