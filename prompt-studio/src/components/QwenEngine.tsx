@@ -48,12 +48,27 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
   const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const scanAttemptsRef = React.useRef(0);
 
-  // Auto-escaneo cuando cambia el nombre o hay nuevos paneles
+  // Auto-escaneo cuando cambia el nombre de proyecto (máx 2 intentos)
   React.useEffect(() => {
-    const timer = setTimeout(scanProjectImages, 1500);
+    scanAttemptsRef.current = 0; // Resetear intentos al cambiar de proyecto
+    
+    const runAutoScan = async () => {
+      if (scanAttemptsRef.current >= 2) return;
+      await scanProjectImages();
+    };
+
+    const timer = setTimeout(runAutoScan, 1500);
     return () => clearTimeout(timer);
-  }, [projectName, panels.length]);
+  }, [projectName]);
+
+  // Re-escanear cuando se agregan paneles nuevos
+  React.useEffect(() => {
+    if (panels.length === 0) return;
+    const timer = setTimeout(scanProjectImages, 1000);
+    return () => clearTimeout(timer);
+  }, [panels.length]);
 
   // Reference for Framer Motion drag constraints
   const carouselOuterRef = React.useRef<HTMLDivElement>(null);
@@ -308,45 +323,101 @@ Salida: SOLO JSON {}`.trim();
     }
   };
 
+
   const scanProjectImages = async () => {
+    const name = projectName.trim() || "Sin_Nombre";
+    
     try {
       const docPath = await documentDir();
-      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
-      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
-      
-      // Aseguramos que la carpeta existe
-      await mkdir(projectDir, { recursive: true });
-      
-      const entries = await readDir(projectDir);
+      const studioRoot = await join(docPath, 'Prompt Studio');
       const newImages: Record<number, string> = {};
+
+      // Fase 1: Buscar TODAS las carpetas que coincidan con el nombre
+      // en cualquier profundidad dentro de Prompt Studio
+      const matchingFolders: string[] = [];
       
-      for (const entry of entries) {
-        if (!entry.isFile) continue;
-        const name = entry.name.toLowerCase();
-        if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) {
-          // Intentamos extraer el número del nombre (ej: "1.png" o "shot_1.png")
-          const numMatch = name.match(/(\d+)/);
-          if (numMatch) {
-            const num = parseInt(numMatch[1]);
-            const fullPath = await join(projectDir, entry.name);
-            const src = convertFileSrc(fullPath);
-            newImages[num] = src;
-            console.log(`[STORYBOARD] Imagen detectada: Panel ${num} -> ${src}`);
+      const findMatchingFolders = async (folderPath: string) => {
+        try {
+          const entries = await readDir(folderPath);
+          for (const entry of entries) {
+            if (entry.isDirectory) {
+              const subPath = await join(folderPath, entry.name);
+              if (entry.name === name) {
+                matchingFolders.push(subPath);
+              }
+              await findMatchingFolders(subPath);
+            }
           }
+        } catch {
+          // ignorar
         }
+      };
+
+      // Tambien probar la ruta directa (por si el nombre ES el proyecto)
+      const directPath = await join(studioRoot, name);
+      matchingFolders.push(directPath);
+      
+      // Buscar en todo Prompt Studio
+      console.log(`[SCAN] Buscando carpeta "${name}" en todo Prompt Studio...`);
+      await findMatchingFolders(studioRoot);
+      console.log(`[SCAN] Carpetas encontradas: ${matchingFolders.length}`);
+
+      // Fase 2: Recolectar imagenes de cada carpeta encontrada (recursivo)
+      const collectImages = async (folderPath: string) => {
+        try {
+          const entries = await readDir(folderPath);
+          for (const entry of entries) {
+            if (entry.isDirectory) {
+              const subPath = await join(folderPath, entry.name);
+              await collectImages(subPath);
+            } else if (entry.isFile) {
+              const fname = entry.name.toLowerCase();
+              if (fname.endsWith('.png') || fname.endsWith('.jpg') || fname.endsWith('.jpeg') || fname.endsWith('.webp')) {
+                const numMatch = fname.match(/(\d+)/);
+                if (numMatch) {
+                  const num = parseInt(numMatch[1]);
+                  if (!newImages[num]) {
+                    const fullPath = await join(folderPath, entry.name);
+                    const src = convertFileSrc(fullPath);
+                    newImages[num] = src;
+                    console.log(`[STORYBOARD] Imagen: Panel ${num} -> ${entry.name}`);
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // carpeta no existe
+        }
+      };
+
+      for (const folder of matchingFolders) {
+        await collectImages(folder);
       }
+
+      const foundAny = Object.keys(newImages).length > 0;
       setProjectImages(newImages);
       setLastScanCount(Object.keys(newImages).length);
-      setImageErrors({}); // Limpiamos errores previos al refrescar
-      
-      // Feedback opcional por consola
-      console.log(`[SCAN] ${Object.keys(newImages).length} imágenes encontradas para el proyecto ${projectName}`);
+      setImageErrors({});
+      console.log(`[SCAN] ${Object.keys(newImages).length} imagenes encontradas para "${name}"`);
+
+      if (!foundAny) {
+        scanAttemptsRef.current += 1;
+        console.log(`[SCAN] Intento ${scanAttemptsRef.current}/2 sin resultados.`);
+        if (scanAttemptsRef.current < 2) {
+          setTimeout(scanProjectImages, 2000);
+        } else {
+          console.log(`[SCAN] 2 intentos completados. Usa el boton Escanear.`);
+        }
+      } else {
+        scanAttemptsRef.current = 0;
+      }
+
     } catch (e) {
-      console.warn("Error escaneando imágenes:", e);
+      console.warn("Error escaneando imagenes:", e);
       setLastScanCount(0);
     }
   };
-
   const openProjectFolder = async () => {
     try {
       const docPath = await documentDir();
@@ -392,7 +463,6 @@ Salida: SOLO JSON {}`.trim();
       
     } catch (e) {
       console.error("Error al subir imagen:", e);
-      alert("Error al subir la imagen. Revisa los permisos.");
     }
   };
 
@@ -401,14 +471,22 @@ Salida: SOLO JSON {}`.trim();
       const docPath = await documentDir();
       const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
       const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
-      
-      const entries = await readDir(projectDir);
-      for (const entry of entries) {
-        if (entry.isFile && entry.name.split('.')[0] === sceneNum.toString()) {
-          const targetPath = await join(projectDir, entry.name);
-          await remove(targetPath);
-          console.log(`[STORYBOARD] Imagen eliminada: ${entry.name}`);
+
+      // Buscar y eliminar archivos con el numero de escena
+      try {
+        const entries = await readDir(projectDir);
+        for (const entry of entries) {
+          if (!entry.isFile) continue;
+          const fname = entry.name.toLowerCase();
+          const numMatch = fname.match(/(\d+)/);
+          if (numMatch && parseInt(numMatch[1]) === sceneNum) {
+            const targetPath = await join(projectDir, entry.name);
+            await remove(targetPath);
+            console.log(`[STORYBOARD] Imagen eliminada: ${entry.name}`);
+          }
         }
+      } catch {
+        // Carpeta no existe, ignorar
       }
 
       setProjectImages(prev => {
@@ -431,7 +509,7 @@ Salida: SOLO JSON {}`.trim();
       let yPos = 20;
 
       // Header Premium
-      doc.setFillColor(15, 23, 42); // slate-900
+      doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, 210, 40, 'F');
       
       doc.setTextColor(255, 255, 255);
@@ -445,19 +523,22 @@ Salida: SOLO JSON {}`.trim();
       
       yPos = 50;
 
-      panels.forEach((p: QwenPanel, i: number) => {
-        if (yPos > 240) {
+      for (let i = 0; i < panels.length; i++) {
+        const p = panels[i];
+        const panelHeight = 75;
+        
+        if (yPos + panelHeight > 270) {
           doc.addPage();
           yPos = 20;
         }
 
-        // Panel Container Border
-        doc.setDrawColor(203, 213, 225); // slate-300
+        // Panel Container
+        doc.setDrawColor(203, 213, 225);
         doc.setLineWidth(0.1);
-        doc.rect(10, yPos, 190, 50);
+        doc.rect(10, yPos, 190, panelHeight);
 
-        // Header Panel (Black bar)
-        doc.setFillColor(30, 41, 59); // slate-800
+        // Header Panel
+        doc.setFillColor(30, 41, 59);
         doc.rect(10, yPos, 190, 8, 'F');
         
         doc.setTextColor(255, 255, 255);
@@ -465,32 +546,50 @@ Salida: SOLO JSON {}`.trim();
         doc.setFont("helvetica", "bold");
         doc.text(`SCENE: ${p.scene || 1} | SHOT: ${i + 1}a | PANEL: ${i + 1}`, 15, yPos + 5.5);
 
-        // Body Content
+        // Intentar cargar la imagen del panel
+        const imageUrl = projectImages[p.scene];
+        let imageAdded = false;
+        if (imageUrl) {
+          try {
+            const response = await fetch(imageUrl);
+            const blob = await response.blob();
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+            doc.addImage(base64, 'PNG', 140, yPos + 10, 55, 55);
+            imageAdded = true;
+          } catch (imgErr) {
+            console.warn(`[PDF] No se pudo cargar imagen panel ${i + 1}:`, imgErr);
+          }
+        }
+
+        // Texto
+        const textWidth = imageAdded ? 115 : 175;
         doc.setTextColor(30, 41, 59);
         doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text("DESCRIPCION VISUAL:", 15, yPos + 15);
         doc.setFont("helvetica", "normal");
-        
-        // Columna Izquierda: Descripción
-        doc.text("DESCRIPCIÓN VISUAL:", 15, yPos + 15);
-        const description = p.description || "Sin descripción";
-        const splitDesc = doc.splitTextToSize(description, 110);
+        const description = p.description || "Sin descripcion";
+        const splitDesc = doc.splitTextToSize(description, textWidth);
         doc.text(splitDesc, 15, yPos + 20);
 
-        // Columna Derecha: Specs Técnicas
-        const xMeta = 135;
+        // Specs
+        const specsY = Math.min(yPos + 20 + splitDesc.length * 3.5 + 5, yPos + 50);
         doc.setFont("helvetica", "bold");
-        doc.text("SPECS TÉCNICAS:", xMeta, yPos + 15);
-        doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
-        
-        doc.text(`• Cámara: ${p.optics || "8K RAW / 100mm Macro"}`, xMeta, yPos + 22);
-        doc.text(`• Physics: ${p.physics || "Standard Dynamic"}`, xMeta, yPos + 26);
-        doc.text(`• Timeline: ${p.timing || "3s"}`, xMeta, yPos + 30);
+        doc.text("SPECS TECNICAS:", 15, specsY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Camara: ${p.optics || "8K RAW / 100mm Macro"}`, 15, specsY + 4);
+        doc.text(`Physics: ${p.physics || "Standard Dynamic"}`, 15, specsY + 8);
+        doc.text(`Timeline: ${p.timing || "3s"}`, 15, specsY + 12);
 
-        yPos += 58;
-      });
+        yPos += panelHeight + 5;
+      }
 
-      // Guardar PDF en carpeta Prompt Studio/guiones usando Tauri
+      // Guardar PDF
       const pdfOutput = doc.output('arraybuffer');
       const docPath = await documentDir();
       
@@ -506,14 +605,14 @@ Salida: SOLO JSON {}`.trim();
         filters: [{ name: "PDF", extensions: ["pdf"] }]
       });
 
-      if (!fullPath) return; // User cancelled
+      if (!fullPath) return;
       
       await writeFile(fullPath, new Uint8Array(pdfOutput));
-      alert(`PDF exportado con éxito a:\n${fullPath}`);
+      alert(`PDF exportado con exito a:\n${fullPath}`);
       
     } catch (error) {
       console.error("Error exporting PDF:", error);
-      alert("Error al exportar el PDF. Revisa que Ollama esté activo.");
+      alert("Error al exportar el PDF. Revisa que Ollama este activo.");
     } finally {
       setIsProcessing(false);
     }
@@ -536,14 +635,14 @@ Salida: SOLO JSON {}`.trim();
       }, null, 2);
       
       await writeFile(filePath, new TextEncoder().encode(data));
-      alert("Configuración del Storyboard guardada con éxito.");
+      alert("Configuracion del Storyboard guardada con exito.");
     } catch (e) {
       console.error("Error guardando JSON:", e);
       alert("No se pudo guardar el archivo JSON.");
     }
   };
 
-  const loadStoryboardJSON = async () => {
+    const loadStoryboardJSON = async () => {
     try {
       const filePath = await openFileDialog({
         title: "Cargar Datos Storyboard (JSON)",
@@ -636,7 +735,7 @@ Salida: SOLO JSON {}`.trim();
             {/* Actions */}
             <div className="flex items-center gap-2">
               <button 
-                onClick={scanProjectImages}
+                onClick={() => { scanAttemptsRef.current = 0; scanProjectImages(); }}
                 className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] text-slate-300 px-4 py-2.5 rounded font-bold transition-all border border-[#333] group/refresh"
                 title="Escanear archivos locales"
               >
@@ -696,6 +795,27 @@ Salida: SOLO JSON {}`.trim();
                 <span className="text-[10px] uppercase font-bold tracking-widest">Cargar JSON</span>
               </button>
             </div>
+
+            <div className="w-px h-8 bg-white/5 mx-2" />
+
+            {/* Limpiar Storyboard */}
+            <button 
+              onClick={() => {
+                if (confirm("¿Limpiar el Storyboard completo?\nLos paneles, guion y datos se eliminarán. Las imágenes seguirán en tu carpeta.")) {
+                  setPanels([]);
+                  setScript("");
+                  setProjectImages({});
+                  setLastScanCount(null);
+                  setImageErrors({});
+                }
+              }}
+              disabled={panels.length === 0 && !script.trim()}
+              className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500 border border-red-500/20 text-red-400 hover:text-white px-4 py-2.5 rounded font-bold transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+              title="Limpiar todo el Storyboard"
+            >
+              <Trash2 size={16} />
+              <span className="text-[10px] uppercase font-bold tracking-widest">Limpiar</span>
+            </button>
           </div>
         </div>
 

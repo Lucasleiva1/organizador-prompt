@@ -206,7 +206,7 @@ const useCharacterStore = () => {
     }
   };
 
-  return { characters, addCharacter, deleteCharacter, loading };
+  return { characters, saveCharacters, addCharacter, deleteCharacter, loading };
 };
 
 const useScriptStore = () => {
@@ -250,13 +250,14 @@ const useScriptStore = () => {
 export default function App() {
   const { scenes, saveScenes, loading: loadingScenes } = useSceneStore();
   const { workspaces, setWorkspaces, loading: loadingWorkspaces } = useWorkspaceStore();
-  const { characters, addCharacter, deleteCharacter } = useCharacterStore();
+  const { characters, saveCharacters, addCharacter, deleteCharacter } = useCharacterStore();
   const { scripts, saveScripts, loading: loadingScripts } = useScriptStore();
   const { settings, saveSettings } = useSettingsStore();
 
   const [isTranslateEn] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
+  const [projectName, setProjectName] = useState(() => localStorage.getItem('ps-project-name') || "");
   const [visibility, setVisibility] = useState({
     showTheme: true,
     showSave: true,
@@ -420,6 +421,8 @@ export default function App() {
 
       await mkdir(projectPath, { recursive: true });
       await revealItemInDir([projectPath]);
+      setProjectName(folderName.trim());
+      localStorage.setItem('ps-project-name', folderName.trim());
       setIsFolderModalOpen(false);
       setFolderName("");
     } catch (err) {
@@ -498,17 +501,28 @@ export default function App() {
             {visibility.showClear && (
                <button 
                 onClick={async () => { 
-                  if (confirm("¿Estás seguro de eliminar todas las escenas?")) {
+                  if (confirm("¿Nuevo proyecto? Se limpiarán escenas, personajes y guiones.\nLas fotos de personajes seguirán en tu carpeta.")) {
+                    // 1. Borrar assets de escenas del disco
                     for (const scene of scenes) {
                       if (scene.asset) await AssetManager.deleteAsset(scene.asset);
                     }
+                    // 2. Limpiar escenas
                     saveScenes([]); 
+                    // 3. Desvincular personajes (fotos se mantienen en disco)
+                    saveCharacters([]);
+                    // 4. Limpiar guiones
+                    saveScripts([]);
+                    // 5. Resetear workspaces a uno vacío
+                    setWorkspaces([{ id: crypto.randomUUID(), theme: 'normal' }]);
+                    // 6. Limpiar nombre del proyecto
+                    setProjectName("");
+                    localStorage.removeItem('ps-project-name');
                   }
                 }} 
                 className="flex items-center gap-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/20 text-red-500 font-bold text-[10px] tracking-widest hover:bg-red-500 hover:text-white transition-all"
-                title="Limpiar todas las escenas"
+                title="Nuevo proyecto: limpia todo"
                >
-                 <Trash2 size={14} /> LIMPIAR
+                 <Trash2 size={14} /> LIMPIAR TODO
                </button>
             )}
 
@@ -655,6 +669,15 @@ export default function App() {
         
 
       </nav>
+
+      {/* Project Name Display */}
+      {projectName && (
+        <div className="w-full text-center py-4 bg-gradient-to-b from-[#0a0a0a] to-transparent">
+          <h1 className="text-3xl md:text-4xl font-black italic text-white/90 tracking-tight uppercase" style={{ fontFamily: "'Inter', sans-serif", letterSpacing: '-0.02em' }}>
+            {projectName}
+          </h1>
+        </div>
+      )}
 
       <CharacterBar 
         characters={characters} 
