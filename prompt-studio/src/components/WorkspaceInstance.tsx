@@ -73,99 +73,80 @@ export const WorkspaceInstance = ({
   }, [filteredLocalScenes, viewMode]);
 
 
-  const addPromptsToScenes = (rawText: string, mode: 'image' | 'video') => {
-    if (!rawText.trim()) return;
-    
-    const hasTable = rawText.includes('|') && (rawText.match(/\|/g) || []).length > 5;
-    
-    let parsedRawScenes: Scene[];
-    if (hasTable) {
-      parsedRawScenes = parseMarkdownTable(rawText, mode);
-    } else {
-      parsedRawScenes = parseSimpleText(rawText, mode);
-    }
-    
-    const newPrompts = parsedRawScenes.map(s => mode === 'image' ? (s.imageText || s.videoText || s.id) : (s.videoText || s.imageText || s.id));
-    
-    const updatedScenes = [...scenes]; // We update the GLOBAL scenes array!
-    
-    newPrompts.forEach((prompt, index) => {
-      // Because we edit the global array by matching existing scenes locally, we find the global indices.
-      // But adding prompts iteratively usually meant "update scenes at index X".
-      // Since scenes are global, appending to 'updatedScenes[index]' from local index is wrong!
-      // We must map it the local scene at that index.
-      const localScene = localScenes[index];
-      if (localScene) {
-        const globalIdx = updatedScenes.findIndex(s => s.id === localScene.id);
-        if (globalIdx !== -1) {
-            if (mode === 'image') updatedScenes[globalIdx].imageText = prompt;
-            if (mode === 'video') updatedScenes[globalIdx].videoText = prompt;
-        }
-      } else {
-        updatedScenes.push({
-          id: crypto.randomUUID(),
-          imageText: mode === 'image' ? prompt : '',
-          videoText: mode === 'video' ? prompt : '',
-          mode: mode,
-          asset: null,
-          groupId: workspace.id,
-          theme: workspace.theme
-        });
-      }
-    });
-
-    saveScenes(updatedScenes);
-    if (mode === 'image') setImageMarkdown('');
-    if (mode === 'video') setVideoMarkdown('');
+  const addPromptsToScenes = (text: string, mode: 'image' | 'video', isAppendOnly: boolean = false) => {
+    importMarkdown(text, mode, isAppendOnly);
+    if (mode === 'image') setImageMarkdown("");
+    else setVideoMarkdown("");
   };
 
-  const importMarkdown = (rawText: string) => {
+  const importMarkdown = useCallback(async (rawText: string, mode: 'image' | 'video', isAppendOnly: boolean = false) => {
     if (!rawText.trim()) return;
 
-    const hasTable = rawText.includes('|') && (rawText.match(/\|/g) || []).length > 5;
-    const isTechnicalSheet = /PLANO|PANEL|ESCENA|SCENE|SHOT/i.test(rawText);
-    let parsedRawScenes: Scene[] = [];
-    
-    if (isTechnicalSheet) {
-      const parsedScenes = ProductionAgent.parseSheet(rawText, workspace.id, workspace.theme || 'normal');
-      const otherWorkspaceScenes = scenes.filter(s => s.groupId !== workspace.id);
-      const currentLocalScenes = scenes.filter(s => s.groupId === workspace.id);
+    const isTechnical = /PLANO|PANEL|ESCENA|SCENE|SHOT|PÁGINA|PAGINA/i.test(rawText);
+    const otherWorkspaceScenes = scenes.filter(s => (s.groupId || 'default') !== workspace.id);
 
-      let finalLocalScenes = [...currentLocalScenes];
+    if (isTechnical) {
+      try {
+        const parsedScenes = ProductionAgent.parseSheet(rawText, workspace.id, workspace.theme || 'normal', mode);
+        const finalLocalScenes = [...localScenes];
 
-      parsedScenes.forEach(parsed => {
-        const targetPos = (parsed as any).sceneNumber || 1;
-        const index = targetPos - 1;
+        parsedScenes.forEach(parsed => {
+          const targetPos = (parsed as any).sceneNumber || 1;
+          const index = targetPos - 1;
 
-        if (index < finalLocalScenes.length) {
-          finalLocalScenes[index] = {
-            ...finalLocalScenes[index],
-            imageText: parsed.imageText,
-            optics: (parsed as any).optics,
-            physics: (parsed as any).physics,
-            vfx: (parsed as any).vfx,
-            sound: (parsed as any).sound
-          };
-        } else {
-          while (finalLocalScenes.length < index) {
+          if (index < finalLocalScenes.length) {
+            // Check if we should skip in append-only mode
+            if (isAppendOnly) {
+              const existing = finalLocalScenes[index];
+              const hasContent = mode === 'image' ? existing.imageText.trim() : existing.videoText.trim();
+              if (hasContent) return; // Skip update
+            }
+
+            // Normal update/overwrite logic
+            finalLocalScenes[index] = {
+              ...finalLocalScenes[index],
+              ...(mode === 'image' 
+                ? { imageText: parsed.imageText, optics: (parsed as any).optics || finalLocalScenes[index].optics, physics: (parsed as any).physics || finalLocalScenes[index].physics }
+                : { videoText: parsed.videoText, timing: (parsed as any).timing || finalLocalScenes[index].timing }
+              ),
+              sceneNumber: targetPos
+            };
+          } else {
+            // Filling gaps or adding new
+            while (finalLocalScenes.length < index) {
+              finalLocalScenes.push({
+                id: crypto.randomUUID(),
+                imageText: '',
+                videoText: '',
+                mode: 'image',
+                asset: null,
+                groupId: workspace.id,
+                theme: workspace.theme
+              });
+            }
             finalLocalScenes.push({
+              ...parsed,
               id: crypto.randomUUID(),
-              imageText: '',
-              videoText: '',
-              mode: 'image',
-              asset: null,
               groupId: workspace.id,
-              theme: workspace.theme
+              theme: workspace.theme,
+              mode: mode
             });
           }
-          finalLocalScenes.push(parsed);
-        }
-      });
+        });
 
-      saveScenes([...otherWorkspaceScenes, ...finalLocalScenes]);
-      return;
-    } else if (hasTable) {
-      parsedRawScenes = parseMarkdownTable(rawText);
+        saveScenes([...otherWorkspaceScenes, ...finalLocalScenes]);
+        return;
+      } catch (err) {
+        console.error("Error parsing technical sheet:", err);
+      }
+    }
+    
+    // Fallback for non-technical markdown or tables
+    const hasTable = rawText.includes('|') && (rawText.match(/\|/g) || []).length > 5;
+    let parsedRawScenes: Scene[] = [];
+
+    if (hasTable) {
+      parsedRawScenes = parseMarkdownTable(rawText, mode);
     } else {
       const hasImageSection = /im[aá]gen|est[aá]tic|📸/i.test(rawText);
       const hasVideoSection = /video|movimiento|🎥/i.test(rawText);
@@ -175,42 +156,49 @@ export const WorkspaceInstance = ({
         const videoPart = videoSplit.slice(1).join('\n') || '';
         parsedRawScenes = [ ...parseSimpleText(imagePart, 'image'), ...parseSimpleText(videoPart, 'video') ];
       } else {
-        parsedRawScenes = parseSimpleText(rawText, 'image');
+        parsedRawScenes = parseSimpleText(rawText, mode);
       }
     }
 
-    const imagePrompts = parsedRawScenes.filter((s: Scene) => s.mode === 'image').map((s: Scene) => s.imageText);
-    const videoPrompts = parsedRawScenes.filter((s: Scene) => s.mode === 'video').map((s: Scene) => s.videoText);
-
-    let newScenes: Scene[] = [];
-    const maxLength = Math.max(imagePrompts.length, videoPrompts.length);
-
-    if (maxLength === 0) {
-      newScenes = [{
+    if (parsedRawScenes.length === 0) {
+      // Single scene addition
+      const newScene: Scene = {
         id: crypto.randomUUID(),
-        imageText: rawText.trim(),
-        videoText: '',
-        mode: 'image',
+        imageText: mode === 'image' ? rawText.trim() : '',
+        videoText: mode === 'video' ? rawText.trim() : '',
+        mode: mode,
         asset: null,
         groupId: workspace.id,
         theme: workspace.theme
-      }];
+      };
+      saveScenes([...scenes, newScene]);
     } else {
-      for (let i = 0; i < maxLength; i++) {
-        newScenes.push({
-          id: crypto.randomUUID(),
-          imageText: imagePrompts[i] || '',
-          videoText: videoPrompts[i] || '',
-          mode: imagePrompts[i] ? 'image' : 'video',
-          asset: null,
-          groupId: workspace.id,
-          theme: workspace.theme
-        });
-      }
+      // Merge parsedRawScenes into local workspace
+      const finalLocalScenes = [...localScenes];
+      parsedRawScenes.forEach((parsed, idx) => {
+        if (idx < finalLocalScenes.length) {
+          if (isAppendOnly) {
+            const existing = finalLocalScenes[idx];
+            const hasContent = mode === 'image' ? existing.imageText.trim() : existing.videoText.trim();
+            if (hasContent) return;
+          }
+          finalLocalScenes[idx] = {
+            ...finalLocalScenes[idx],
+            ...(mode === 'image' ? { imageText: parsed.imageText } : { videoText: parsed.videoText })
+          };
+        } else {
+          finalLocalScenes.push({
+            ...parsed,
+            id: crypto.randomUUID(),
+            groupId: workspace.id,
+            theme: workspace.theme,
+            mode: mode
+          });
+        }
+      });
+      saveScenes([...otherWorkspaceScenes, ...finalLocalScenes]);
     }
-
-    saveScenes([...scenes, ...newScenes]);
-  };
+  }, [scenes, workspace.id, workspace.theme, localScenes, saveScenes]);
 
 
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,7 +207,7 @@ export const WorkspaceInstance = ({
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      if (text) importMarkdown(text);
+      if (text) importMarkdown(text, 'image');
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -760,40 +748,60 @@ export const WorkspaceInstance = ({
             <FileText size={16} /> IMPORTAR MARKDOWN
           </h2>
           <p className="text-[10px] text-slate-500 mb-3">Los planos importados aquí pertenecen solo a esta sección.</p>
-          <div className="flex flex-col gap-2 mb-3">
+          <div className="flex flex-col gap-2 mb-6">
             <h3 className="text-[9px] font-bold text-slate-500 mb-1 flex items-center gap-1"><ImageIcon size={10}/> LISTA / TABLA IMÁGENES</h3>
             <textarea
-              className="w-full h-20 bg-black rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-[#222] focus:border-[#444] transition-all resize-none font-mono text-[10px]"
-              placeholder="Pega texto..."
+              className="w-full h-24 bg-black rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-[#222] focus:border-[#444] transition-all resize-none font-mono text-[10px] mb-2"
+              placeholder="Pega texto de planos aquí..."
               value={imageMarkdown}
               onChange={(e) => setImageMarkdown(e.target.value)}
             />
+            <div className="flex gap-2">
               <button 
-                onClick={() => addPromptsToScenes(imageMarkdown, 'image')} 
+                onClick={() => addPromptsToScenes(imageMarkdown, 'image', false)} 
                 disabled={!imageMarkdown.trim()}
-                className="flex-1 py-3 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all shadow-xl shadow-emerald-500/5 group"
+                className="flex-1 py-2.5 rounded-xl font-black text-[9px] tracking-widest uppercase text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all shadow-xl shadow-emerald-500/5"
+                title="Sincroniza todo: actualiza existentes y añade nuevos"
               >
-                <Plus size={14} className="inline mr-2 group-hover:rotate-90 transition-transform" />
-                Cargar Planos
+                Cargar Todo
               </button>
+              <button 
+                onClick={() => addPromptsToScenes(imageMarkdown, 'image', true)} 
+                disabled={!imageMarkdown.trim()}
+                className="flex-1 py-2.5 rounded-xl font-black text-[9px] tracking-widest uppercase text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/20 transition-all shadow-xl shadow-emerald-500/20"
+                title="Solo añade planos que no existan aún"
+              >
+                Agregar Escenas
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2">
             <h3 className="text-[9px] font-bold text-slate-500 mb-1 flex items-center gap-1"><Clapperboard size={10}/> LISTA / TABLA VIDEOS</h3>
             <textarea
-              className="w-full h-20 bg-black rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-[#222] focus:border-[#444] transition-all resize-none font-mono text-[10px]"
-              placeholder="Pega texto..."
+              className="w-full h-24 bg-black rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 outline-none border border-[#222] focus:border-[#444] transition-all resize-none font-mono text-[10px] mb-2"
+              placeholder="Pega texto de videos aquí..."
               value={videoMarkdown}
               onChange={(e) => setVideoMarkdown(e.target.value)}
             />
+            <div className="flex gap-2">
               <button 
-                onClick={() => addPromptsToScenes(videoMarkdown, 'video')} 
+                onClick={() => addPromptsToScenes(videoMarkdown, 'video', false)} 
                 disabled={!videoMarkdown.trim()}
-                className="flex-1 py-3 rounded-xl font-black text-[10px] tracking-[0.2em] uppercase text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-all shadow-xl shadow-sky-500/5 group"
+                className="flex-1 py-2.5 rounded-xl font-black text-[9px] tracking-widest uppercase text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-all shadow-xl shadow-sky-500/5"
+                title="Sincroniza todo: actualiza existentes y añade nuevos"
               >
-                <Plus size={14} className="inline mr-2 group-hover:rotate-90 transition-transform" />
-                Cargar Planos
+                Cargar Todo
               </button>
+              <button 
+                onClick={() => addPromptsToScenes(videoMarkdown, 'video', true)} 
+                disabled={!videoMarkdown.trim()}
+                className="flex-1 py-2.5 rounded-xl font-black text-[9px] tracking-widest uppercase text-white bg-sky-600 hover:bg-sky-500 border border-sky-500/20 transition-all shadow-xl shadow-sky-500/20"
+                title="Solo añade planos que no existan aún"
+              >
+                Agregar Escenas
+              </button>
+            </div>
           </div>
         </div>
 

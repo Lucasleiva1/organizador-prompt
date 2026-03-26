@@ -54,20 +54,30 @@ const parseScriptText = (text: string): ParsedMetadata => {
   const cameraChoreography = getField(['Camera Choreography', 'Movimiento de Cámara', 'Cámara']);
 
   let mainPrompt = "";
-  const visualMatch = text.match(/(?:Visual Prompt \(Video Core\)|Visual Instruction|Visual|Descripción):\s*(.*?)(?=\\n|\\*\\*|$)/s);
+  const fieldNames = ['Visual', 'Descripción', 'Óptica', 'Cámara', 'Lente', 'Iluminación', 'Luz', 'Atmósfera', 'Sound', 'Sonido', 'Audio', 'Cinematic', 'Acción', 'Efecto', 'Dynamics', 'VFX', 'Post', 'Movimiento'];
+  const fieldsRegex = new RegExp(`(?:\\n|^)\\s*(?:\\d+[\\.\\)]\\s*)?(?:${fieldNames.join('|')}):\\s*`, 'i');
+  const firstFieldMatch = text.match(fieldsRegex);
+  
+  const headerText = firstFieldMatch ? text.substring(0, firstFieldMatch.index).trim() : "";
+  const visualMatch = text.match(/(?:^|\n)\s*(?:\d+[\.\)]\s*)?(?:Visual Prompt \(Video Core\)|Visual Instruction|Visual|Descripción):\s*(.*?)(?=\n|(?:\s*\d+[\.\)]\s*)?(?:Visual|Descripción|Óptica|Cámara|Lente|Iluminación|Luz|Atmósfera|Sound|Sonido|Audio|Cinematic|Acción|Efecto|Dynamics|VFX|Post|Movimiento)|\*\*|$)/is);
   
   if (visualMatch) {
-    mainPrompt = visualMatch[1].trim();
+    mainPrompt = (headerText ? headerText + "\n" : "") + visualMatch[1].trim();
   } else {
     // Fallback cleaning
-    mainPrompt = text
-      .replace(/###\s*PLANO\s*\d+.*?\n/gi, '')
-      .replace(/##.*?\n/g, '')
-      .replace(/#.*?\n/g, '')
-      .split('\n')
-      .filter(line => !line.includes(':'))
-      .join(' ')
-      .trim();
+    const baseText = headerText || text;
+    const lines = baseText
+      .replace(/##+.*?\n/g, '')
+      .split('\n');
+    
+    // Only filter out lines with colons if there ARE lines without colons
+    // and those lines are descriptive prompts.
+    const descriptiveLines = lines.filter(line => !line.includes(':') && line.trim().length > 0);
+    if (descriptiveLines.length > 0) {
+       mainPrompt = (headerText ? headerText + "\n" : "") + descriptiveLines.join(' ').trim();
+    } else {
+       mainPrompt = (headerText ? headerText + "\n" : "") + lines.join(' ').trim();
+    }
   }
   
   return { mainPrompt, metadata, optics, lighting, audio, dynamics, vfx: "", sound, cameraChoreography, vfxDetail: vfx };

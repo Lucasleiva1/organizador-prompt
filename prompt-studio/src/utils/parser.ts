@@ -109,7 +109,7 @@ export const parseSimpleText = (rawText: string, mode: "image" | "video"): Scene
   // Patrones robustos de separación
   const numberPattern = /^\s*(?:\*\*)?\d+[\s\.\-\)]+/;
   const separatorPattern = /^\s*(?:---|\*\*\*|___)\s*$/;
-  const planoPattern = /^\s*(?:[\*\-\+]\s*)?(?:\[cite_start\])?\s*\*?\*?(?:PLANO|PANEL|ESCENA|SCENE|SHOT)\s*\d+/i;
+  const planoPattern = /^\s*(?:#+\s*)?(?:[\*\-\+]\s*)?(?:\[cite_start\])?\s*\*?\*?(?:PLANO|PANEL|ESCENA|SCENE|SHOT|PÁGINA|PAGINA)\s*\d+/i;
 
   for (const line of lines) {
     const isNewChunk = numberPattern.test(line) || separatorPattern.test(line) || planoPattern.test(line);
