@@ -1,4 +1,20 @@
-import { Scene } from "../types";
+interface Scene {
+  id: string;
+  imageText: string;
+  videoText: string;
+  translatedImageText?: string;
+  translatedVideoText?: string;
+  mode: "image" | "video";
+  asset: string | null;
+  groupId?: string;
+  theme?: "normal" | "golden";
+  sceneNumber?: number;
+  optics?: string;
+  physics?: string;
+  vfx?: string;
+  sound?: string;
+  action?: string;
+}
 
 /**
  * PRODUCTION AGENT LOGIC
