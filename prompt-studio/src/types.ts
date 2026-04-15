@@ -32,3 +32,12 @@ export interface Script {
   title: string;
   content: string;
 }
+
+export interface QwenPanel {
+  scene: number;
+  description: string;
+  optics: string;
+  physics: string;
+  timing: string;
+  imageUrl?: string;
+}

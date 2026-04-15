@@ -1,0 +1,13 @@
+PLANO 1: 
+Visual: Primer plano de las entradas amarillas.
+Acción: Un ligero soplido de viento mueve la esquina.
+Óptica: 35mm Vintage.
+VFX: Aberración cromática sutil.
+Sonido: Siseo industrial sordo.
+
+PLANO 2:
+Visual: Dax y Leo caminando por las vías.
+Acción: Caminan decidido hacia las torres.
+Óptica: 50mm Anamórfico.
+VFX: Humo volumétrico en el fondo.
+Sonido: Latido de bombo rítmico.

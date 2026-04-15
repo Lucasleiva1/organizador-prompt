@@ -8,7 +8,7 @@ import { writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
-import { Scene, Workspace, Character, Script } from "./types";
+import { Scene, Workspace, Character, Script, QwenPanel } from "./types";
 import { WorkspaceInstance } from "./components/WorkspaceInstance";
 import { CharacterBar } from "./components/CharacterBar";
 import { AssetManager } from "./utils/AssetManager";
@@ -243,15 +243,56 @@ const useScriptStore = () => {
   return { scripts, saveScripts, loading };
 };
 
+const useStoryboardStore = () => {
+  const [panels, setPanels] = useState<QwenPanel[]>([]);
+  const [script, setScript] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [store, setStore] = useState<any>(null);
 
+  useEffect(() => {
+    let mounted = true;
+    const initStore = async () => {
+      try {
+        const s = await load("storyboard.json", { autoSave: false, defaults: { panels: [], script: "" } });
+        if (!mounted) return;
+        setStore(s);
+        const savedPanels = await s.get<QwenPanel[]>("panels");
+        const savedScript = await s.get<string>("script");
+        if (mounted && savedPanels && Array.isArray(savedPanels)) setPanels(savedPanels);
+        if (mounted && typeof savedScript === "string") setScript(savedScript);
+      } catch (e) {
+        console.error("Error loading storyboard internal store:", e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    initStore();
+    return () => { mounted = false; };
+  }, []);
 
+  const saveStoryboardPanels = async (newPanels: QwenPanel[]) => {
+    setPanels(newPanels);
+    if (store) {
+      try { await store.set("panels", newPanels); await store.save(); } catch (e) { console.error("Error saving panels:", e); }
+    }
+  };
+  
+  const saveStoryboardScript = async (newScript: string) => {
+    setScript(newScript);
+    if (store) {
+      try { await store.set("script", newScript); await store.save(); } catch (e) { console.error("Error saving script:", e); }
+    }
+  };
 
+  return { panels, script, saveStoryboardPanels, saveStoryboardScript, loading };
+};
 
 export default function App() {
   const { scenes, saveScenes, loading: loadingScenes } = useSceneStore();
   const { workspaces, setWorkspaces, loading: loadingWorkspaces } = useWorkspaceStore();
   const { characters, saveCharacters, addCharacter, deleteCharacter } = useCharacterStore();
   const { scripts, saveScripts, loading: loadingScripts } = useScriptStore();
+  const { panels: storyboardPanels, script: storyboardScript, saveStoryboardPanels, saveStoryboardScript, loading: _loadingStoryboard } = useStoryboardStore();
   const { settings, saveSettings } = useSettingsStore();
 
   const [isTranslateEn] = useState(false);
@@ -383,7 +424,15 @@ export default function App() {
         filters: [{ name: "Proyecto Prompt Studio", extensions: ["json"] }]
       });
       if (!filePath) return; // user cancelled
-      const projectData = JSON.stringify({ scenes, workspaces, scripts }, null, 2);
+      const projectData = JSON.stringify({ 
+        projectName, 
+        scenes, 
+        workspaces, 
+        scripts,
+        characters,
+        storyboardPanels,
+        storyboardScript 
+      }, null, 2);
       await writeTextFile(filePath, projectData);
     } catch (err) {
       console.error("Error saving project:", err);
@@ -402,9 +451,25 @@ export default function App() {
       const { readTextFile } = await import("@tauri-apps/plugin-fs");
       const text = await readTextFile(filePath);
       const data = JSON.parse(text);
+      
+      if (data.projectName) {
+        setProjectName(data.projectName);
+        localStorage.setItem('ps-project-name', data.projectName);
+      }
+      
       if (data.scenes && Array.isArray(data.scenes)) await saveScenes(data.scenes);
       if (data.workspaces && Array.isArray(data.workspaces)) await setWorkspaces(data.workspaces);
       if (data.scripts && Array.isArray(data.scripts)) await saveScripts(data.scripts);
+      if (data.characters && Array.isArray(data.characters)) await saveCharacters(data.characters);
+      
+      if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
+        await saveStoryboardPanels(data.storyboardPanels);
+      }
+      
+      if (typeof data.storyboardScript === "string") {
+        await saveStoryboardScript(data.storyboardScript);
+      }
+      
     } catch (err) {
       console.error("Error loading project:", err);
       alert("Error al cargar el proyecto.");
@@ -437,6 +502,83 @@ export default function App() {
     } catch (err) {
       console.error("Error creating project folder:", err);
       alert("No se pudo crear la carpeta. Asegúrate de tener permisos en Documentos.");
+    }
+  };
+
+  const handleLoadProjectFolder = async () => {
+    try {
+      const selectedPath = await openDialog({
+        title: "Seleccionar Carpeta de Proyecto Existente",
+        directory: true,
+        multiple: false
+      });
+      if (!selectedPath || typeof selectedPath !== "string") return;
+
+      // Extraer nombre de la carpeta del path
+      const parts = selectedPath.replace(/[/\\]+$/, '').split(/[/\\]/);
+      const name = parts[parts.length - 1] || "Sin_Nombre";
+
+      // Setear nombre del proyecto
+      setProjectName(name);
+      localStorage.setItem('ps-project-name', name);
+
+      // Escanear todos los archivos .json dentro de la carpeta
+      const { readDir, readTextFile } = await import("@tauri-apps/plugin-fs");
+      const entries = await readDir(selectedPath);
+      
+      let loadedSomething = false;
+
+      for (const entry of entries) {
+        if (!entry.name || !entry.name.endsWith('.json')) continue;
+        
+        try {
+          const fullPath = await join(selectedPath, entry.name);
+          const text = await readTextFile(fullPath);
+          const data = JSON.parse(text);
+          
+          // Intentar cargar datos de proyecto (formato unificado)
+          if (data.scenes && Array.isArray(data.scenes)) {
+            await saveScenes(data.scenes);
+            loadedSomething = true;
+          }
+          if (data.workspaces && Array.isArray(data.workspaces)) {
+            await setWorkspaces(data.workspaces);
+            loadedSomething = true;
+          }
+          if (data.scripts && Array.isArray(data.scripts)) {
+            await saveScripts(data.scripts);
+            loadedSomething = true;
+          }
+          if (data.characters && Array.isArray(data.characters)) {
+            await saveCharacters(data.characters);
+            loadedSomething = true;
+          }
+          if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
+            await saveStoryboardPanels(data.storyboardPanels);
+            loadedSomething = true;
+          }
+          if (typeof data.storyboardScript === "string") {
+            await saveStoryboardScript(data.storyboardScript);
+            loadedSomething = true;
+          }
+          if (data.projectName && typeof data.projectName === "string") {
+            setProjectName(data.projectName);
+            localStorage.setItem('ps-project-name', data.projectName);
+          }
+        } catch (fileErr) {
+          console.warn(`No se pudo leer ${entry.name}:`, fileErr);
+        }
+      }
+
+      setIsFolderModalOpen(false);
+      if (loadedSomething) {
+        alert(`Proyecto "${name}" cargado correctamente.`);
+      } else {
+        alert(`Carpeta "${name}" seleccionada como proyecto. No se encontraron archivos JSON de proyecto dentro.`);
+      }
+    } catch (err) {
+      console.error("Error loading project folder:", err);
+      alert("No se pudo cargar la carpeta de proyecto.");
     }
   };
 
@@ -486,13 +628,22 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             {visibility.showProjectFolder && (
-              <button
-                onClick={() => setIsFolderModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/20 hover:border-violet-500/40 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)]"
-              >
-                <FolderPlus size={14} />
-                CREAR PROYECTO
-              </button>
+              <>
+                <button
+                  onClick={() => setIsFolderModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-violet-500/20 hover:border-violet-500/40 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)]"
+                >
+                  <FolderPlus size={14} />
+                  CREAR PROYECTO
+                </button>
+                <button
+                  onClick={handleLoadProjectFolder}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                >
+                  <FolderOpen size={14} />
+                  CARGAR PROYECTO
+                </button>
+              </>
             )}
 
             {visibility.showScripts && (
@@ -694,7 +845,13 @@ export default function App() {
         deleteCharacter={deleteCharacter} 
       />
 
-      <QwenEngine onAddGeneratedScenes={addGeneratedScenes} />
+      <QwenEngine 
+        onAddGeneratedScenes={addGeneratedScenes}
+        panels={storyboardPanels}
+        setPanels={(p) => saveStoryboardPanels(p)}
+        script={storyboardScript}
+        setScript={(s) => saveStoryboardScript(s)}
+      />
 
 
 
@@ -781,15 +938,15 @@ export default function App() {
                   <FolderPlus size={24} />
                 </div>
                 
-                <h2 className="text-xl font-black text-white mb-2 tracking-tight">NUEVO PROYECTO</h2>
+                <h2 className="text-xl font-black text-white mb-2 tracking-tight">PROYECTO</h2>
                 <p className="text-sm text-slate-400 mb-8 leading-relaxed">
-                  Crea una carpeta donde vas a poder guardar todo lo relacionado con este proyecto. 
-                  Esto se creará en <span className="text-violet-400 font-medium">Documentos/Prompt Studio/</span>
+                  Crea una carpeta nueva o cargá una existente para trabajar.
+                  Las carpetas se crean en <span className="text-violet-400 font-medium">Documentos/Prompt Studio/</span>
                 </p>
 
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">NOMBRE DE LA CARPETA</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">NOMBRE DE LA CARPETA (NUEVO)</label>
                     <input
                       type="text"
                       autoFocus
@@ -816,6 +973,22 @@ export default function App() {
                       CREAR CARPETA
                     </button>
                   </div>
+
+                  {/* Separador */}
+                  <div className="flex items-center gap-4 py-2">
+                    <div className="flex-1 h-px bg-white/10" />
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">o</span>
+                    <div className="flex-1 h-px bg-white/10" />
+                  </div>
+
+                  {/* Botón cargar carpeta existente */}
+                  <button
+                    onClick={handleLoadProjectFolder}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-widest hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] active:scale-[0.98] transition-all"
+                  >
+                    <FolderOpen size={16} />
+                    CARGAR CARPETA EXISTENTE
+                  </button>
                 </div>
               </div>
             </motion.div>

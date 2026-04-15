@@ -24,23 +24,17 @@ import { save as saveDialog, open as openFileDialog } from "@tauri-apps/plugin-d
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { AssetManager } from "../utils/AssetManager";
-
-interface QwenPanel {
-  scene: number;
-  description: string;
-  optics: string;
-  physics: string;
-  timing: string;
-  imageUrl?: string;
-}
+import { QwenPanel } from "../types";
 
 interface QwenEngineProps {
   onAddGeneratedScenes?: (panels: QwenPanel[]) => void;
+  panels: QwenPanel[];
+  setPanels: (panels: QwenPanel[]) => void;
+  script: string;
+  setScript: (script: string) => void;
 }
 
-export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) => {
-  const [script, setScript] = useState("");
-  const [panels, setPanels] = useState<QwenPanel[]>([]);
+export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, panels, setPanels, script, setScript }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [projectName, setProjectName] = useState("Sin_Nombre");
