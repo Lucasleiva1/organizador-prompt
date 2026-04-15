@@ -23,6 +23,7 @@ import { writeFile, mkdir, readDir, readFile, remove } from '@tauri-apps/plugin-
 import { save as saveDialog, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { AssetManager } from "../utils/AssetManager";
 
 interface QwenPanel {
   scene: number;
@@ -132,17 +133,15 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
       return lines.slice(1).filter(l => l.trim().length > 5);
     }
     
-    // Dividimos por marcadores de panel, incluyendo el nuevo formato "Panel X.X" y variaciones de markdown
-    const segments = text.split(/(?=### PANEL|## PANEL|PANEL #|PANEL \d+|- \*\*Panel \d+\.\d+|Panel \d+\.\d+)/gi);
+    // Dividimos por marcadores de panel, incluyendo el nuevo formato "Panel X.X" y variaciones de markdown, además de "Plano X"
+    const segments = text.split(/(?=### PANEL|## PANEL|PANEL #|PANEL \d+|- \*\*Panel \d+\.\d+|Panel \d+\.\d+|Plano \d+)/gi);
     
     return segments
       .map(s => s.trim())
       .filter(s => {
         if (s.length < 10) return false;
-        // Solo aceptamos si contiene "PANEL" o al menos 2 campos técnicos
-        const hasPanelMarker = /PANEL\s*#?\d+/i.test(s);
-        const techCount = (s.match(/Composición|Encuadre|Cámara|Lente|Luz|Atmósfera|Acción|Efecto/gi) || []).length;
-        return hasPanelMarker || techCount >= 2;
+        // Solo aceptamos si explícitamente contiene "PANEL" o "Plano" para evitar fragmentos iniciales/basura
+        return /(?:PANEL|Plano)\s*#?\d+/i.test(s);
       });
   };
 
@@ -171,6 +170,14 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
     if (comp || action || camera !== "N/A" || physics !== "N/A") {
       // Consolidamos TODA la información en el campo finalDesc (Acción) para copia rápida
       let finalDesc = "";
+      
+      // Detectamos explícitamente si empieza con Plano X / Panel X y lo pegamos al principio
+      const firstLineMatch = text.trim().match(/^(?:###|\- \*\*|#)?\s*(?:PANEL|Plano)\s*#?\d+[^\n]*/i);
+      if (firstLineMatch) {
+        const title = firstLineMatch[0].replace(/^(?:###|\- \*\*|#)?\s*/, '').replace(/\*\*$/, '').trim();
+        finalDesc += `--- ${title.toUpperCase()} ---\n`;
+      }
+
       if (comp && comp !== "N/A") finalDesc += `[${comp.toUpperCase()}] `;
       if (action) finalDesc += `${action}. `;
       if (camera && camera !== "N/A") finalDesc += `CÁMARA: ${camera}. `;
@@ -215,7 +222,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
   };
 
   const processWithQwen = async () => {
-    console.log("ALERTA: Iniciando la función processWithQwen...");
+    console.log("ALERTA: Iniciando lógica de detección de Planos (sin IA)...");
     
     try {
       const trimmedScript = script.trim();
@@ -232,89 +239,37 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes }) 
 
       setProgress({ current: 0, total: finalChunks.length });
       
-      const systemPrompt = `Actúa como un Director de Fotografía experto en IA de video.
-Genera un objeto JSON para un plano cinematográfico.
-El campo 'description' DEBE contener exactamente esta estructura:
-PLANO # (Panel #): Título
-- Visual Prompt (Video Core): [Detalle visual macro/micro]
-- Cinematic Action: [Acción de personajes/elementos]
-- Camera Choreography: [Movimientos técnicos de cámara]
-- VFX & Post: [Efectos y estilo óptico]
-- Sound Design: [Atmósfera sonora]
-
-Campos requeridos en el JSON: 'scene' (número), 'description' (el bloque anterior completo), 'optics' (resumen de cámara), 'physics' (VFX/Estilo), 'timing' (duración).
-Salida: SOLO JSON {}`.trim();
-
       const allPanels: QwenPanel[] = [];
 
       for (let i = 0; i < finalChunks.length; i++) {
         setProgress({ current: i + 1, total: finalChunks.length });
         
-        // INTENTO 1: Regex
+        // Extracción mediante expresiones regulares (100% Sin IA local)
         const fastResult = regexExtract(finalChunks[i], i + 1);
         if (fastResult) {
           allPanels.push(fastResult);
-          setPanels([...allPanels]);
-          continue;
-        }
-
-        // INTENTO 2: IA
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-        try {
-          const response = await fetch('http://127.0.0.1:11434/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              model: "qwen2.5:3b",
-              prompt: `${systemPrompt}\n\nTEXTO:\n${finalChunks[i]}`,
-              stream: false,
-              format: "json",
-              options: { temperature: 0 }
-            })
-          });
-
-          clearTimeout(timeoutId);
-
-          if (response.ok) {
-            const data = await response.json();
-            const panel = JSON.parse(data.response);
-            if (panel) {
-              // Consolidamos en el push de la IA también por si la IA no lo hizo perfecto
-              const consolidatedDesc = panel.description?.includes(panel.optics) 
-                ? panel.description 
-                : `[${panel.optics || 'N/A'}] ${panel.description}. CÁMARA: ${panel.optics || 'N/A'}. EFECTO: ${panel.physics || 'N/A'}`;
-
-              allPanels.push({
-                scene: i + 1,
-                description: consolidatedDesc,
-                optics: panel.optics || "N/A",
-                physics: panel.physics || "N/A",
-                timing: panel.timing || "3s"
-              });
-              setPanels([...allPanels]);
-            }
+        } else {
+          // Fallback puro en caso de no detectar estructura técnica
+          let fallbackDesc = finalChunks[i].trim();
+          if (fallbackDesc.length > 150) {
+             fallbackDesc = fallbackDesc.substring(0, 150) + "...";
           }
-        } catch (e) {
-          clearTimeout(timeoutId);
-          console.warn("Fallo en panel IA:", e);
           allPanels.push({
             scene: i + 1,
-            description: "⚠️ Error de procesamiento o timeout.",
+            description: fallbackDesc,
             optics: "N/A",
             physics: "N/A",
             timing: "3s"
           });
-          setPanels([...allPanels]);
         }
-        await new Promise(r => setTimeout(r, 400));
+        setPanels([...allPanels]);
+        // Pequeño delay para no bloquear el renderizado si hay muchos planos
+        await new Promise(r => setTimeout(r, 50));
       }
       setIsModalOpen(false);
     } catch (globalError) {
       console.error("ERROR CRÍTICO EN PROCESO:", globalError);
-      alert("Error inesperado en el motor. Por favor revisa la consola.");
+      alert("Error inesperado en el detector. Por favor revisa la consola.");
     } finally {
       setIsProcessing(false);
       setProgress({ current: 0, total: 0 });
@@ -329,48 +284,14 @@ Salida: SOLO JSON {}`.trim();
     
     try {
       const docPath = await documentDir();
-      const studioRoot = await join(docPath, 'Prompt Studio');
+      const targetFolder = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
       const newImages: Record<number, string> = {};
 
-      // Fase 1: Buscar TODAS las carpetas que coincidan con el nombre
-      // en cualquier profundidad dentro de Prompt Studio
-      const matchingFolders: string[] = [];
-      
-      const findMatchingFolders = async (folderPath: string) => {
-        try {
-          const entries = await readDir(folderPath);
-          for (const entry of entries) {
-            if (entry.isDirectory) {
-              const subPath = await join(folderPath, entry.name);
-              if (entry.name === name) {
-                matchingFolders.push(subPath);
-              }
-              await findMatchingFolders(subPath);
-            }
-          }
-        } catch {
-          // ignorar
-        }
-      };
-
-      // Tambien probar la ruta directa (por si el nombre ES el proyecto)
-      const directPath = await join(studioRoot, name);
-      matchingFolders.push(directPath);
-      
-      // Buscar en todo Prompt Studio
-      console.log(`[SCAN] Buscando carpeta "${name}" en todo Prompt Studio...`);
-      await findMatchingFolders(studioRoot);
-      console.log(`[SCAN] Carpetas encontradas: ${matchingFolders.length}`);
-
-      // Fase 2: Recolectar imagenes de cada carpeta encontrada (recursivo)
       const collectImages = async (folderPath: string) => {
         try {
           const entries = await readDir(folderPath);
           for (const entry of entries) {
-            if (entry.isDirectory) {
-              const subPath = await join(folderPath, entry.name);
-              await collectImages(subPath);
-            } else if (entry.isFile) {
+            if (entry.isFile) {
               const fname = entry.name.toLowerCase();
               if (fname.endsWith('.png') || fname.endsWith('.jpg') || fname.endsWith('.jpeg') || fname.endsWith('.webp')) {
                 const numMatch = fname.match(/(\d+)/);
@@ -391,9 +312,7 @@ Salida: SOLO JSON {}`.trim();
         }
       };
 
-      for (const folder of matchingFolders) {
-        await collectImages(folder);
-      }
+      await collectImages(targetFolder);
 
       const foundAny = Object.keys(newImages).length > 0;
       setProjectImages(newImages);
@@ -418,11 +337,11 @@ Salida: SOLO JSON {}`.trim();
       setLastScanCount(0);
     }
   };
+
   const openProjectFolder = async () => {
     try {
       const docPath = await documentDir();
-      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
-      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
       await mkdir(projectDir, { recursive: true });
       await revealItemInDir(projectDir);
     } catch (e) {
@@ -440,8 +359,7 @@ Salida: SOLO JSON {}`.trim();
       if (!selected || typeof selected !== 'string') return;
 
       const docPath = await documentDir();
-      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
-      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
       await mkdir(projectDir, { recursive: true });
 
       // Leemos el archivo original
@@ -469,8 +387,7 @@ Salida: SOLO JSON {}`.trim();
   const removeImageForPanel = async (sceneNum: number) => {
     try {
       const docPath = await documentDir();
-      const baseDir = await join(docPath, 'Prompt Studio', 'images-storyboard');
-      const projectDir = await join(baseDir, projectName.trim() || "Sin_Nombre");
+      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
 
       // Buscar y eliminar archivos con el numero de escena
       try {
@@ -593,7 +510,7 @@ Salida: SOLO JSON {}`.trim();
       const pdfOutput = doc.output('arraybuffer');
       const docPath = await documentDir();
       
-      const targetFolder = await join(docPath, 'Prompt Studio', 'guiones');
+      const targetFolder = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'guiones');
       await mkdir(targetFolder, { recursive: true });
 
       const defaultFileName = `Qwen_Storyboard_${Date.now()}.pdf`;

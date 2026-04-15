@@ -2,8 +2,24 @@ import { writeFile, readFile, mkdir, BaseDirectory, remove } from '@tauri-apps/p
 import { join } from '@tauri-apps/api/path';
 
 export class AssetManager {
-  // New user-visible directory in "Documents"
-  private static readonly NEW_ASSETS_DIR = 'Prompt Studio/personajes';
+  // Retorna el nombre del proyecto actual
+  private static get projectDirName() {
+    const pName = localStorage.getItem('ps-project-name');
+    return pName ? pName.trim() : '';
+  }
+
+  // Retorna el subdirectorio de assets usando el nombre de proyecto
+  private static get NEW_ASSETS_DIR() {
+    const pName = this.projectDirName;
+    return pName ? `Prompt Studio/${pName}/personajes` : 'Prompt Studio/personajes';
+  }
+
+  // Retorna la ruta base relativa desde Documents para otras carpetas del proyecto
+  static getProjectRelativeBasePath(): string {
+    const pName = this.projectDirName;
+    return pName ? `Prompt Studio/${pName}` : 'Prompt Studio';
+  }
+
   // Old hidden AppData directory (for backward compatibility)
   private static readonly OLD_ASSETS_DIR = 'assets';
 

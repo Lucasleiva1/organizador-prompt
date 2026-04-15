@@ -440,7 +440,7 @@ export const WorkspaceInstance = ({
 
       const pdfOutput = doc.output('arraybuffer');
       const sysDocPath = await documentDir();
-      const targetFolder = await join(sysDocPath, 'Prompt Studio', 'exportaciones');
+      const targetFolder = await join(sysDocPath, AssetManager.getProjectRelativeBasePath(), 'producción final');
       await mkdir(targetFolder, { recursive: true });
 
       const defaultPath = await join(targetFolder, `${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
@@ -470,7 +470,7 @@ export const WorkspaceInstance = ({
 
     try {
       const sysDocPath = await documentDir();
-      const promptStudioPath = await join(sysDocPath, 'Prompt Studio');
+      const promptStudioPath = await join(sysDocPath, AssetManager.getProjectRelativeBasePath());
       
       let foundPath = "";
 
@@ -541,7 +541,7 @@ export const WorkspaceInstance = ({
   const openProductionFolder = async () => {
     try {
       const docs = await documentDir();
-      const folderPath = await join(docs, "Prompt Studio", "images-storyboard", workspace.name || "Sin_Nombre");
+      const folderPath = await join(docs, AssetManager.getProjectRelativeBasePath(), "images-storyboard", workspace.name || "Sin_Nombre");
       
       await mkdir(folderPath, { recursive: true });
       console.log("Invocando comando Rust open_folder:", folderPath);

@@ -8,6 +8,7 @@ import { writeFile, mkdir, writeTextFile } from "@tauri-apps/plugin-fs";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import * as pdfjsLib from 'pdfjs-dist';
+import { AssetManager } from "../utils/AssetManager";
 
 // Configuración del worker de PDF.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -185,7 +186,7 @@ export default function ScriptManager({ scripts, saveScripts, onClose }: ScriptM
   const openFolder = async () => {
     try {
       const docPath = await documentDir();
-      const targetFolder = await join(docPath, 'Prompt Studio', 'guiones');
+      const targetFolder = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'guiones');
       await mkdir(targetFolder, { recursive: true });
       
       try {
@@ -217,7 +218,7 @@ export default function ScriptManager({ scripts, saveScripts, onClose }: ScriptM
       const pdfOutput = doc.output('arraybuffer');
       const docPath = await documentDir();
       
-      const targetFolder = await join(docPath, 'Prompt Studio', 'guiones');
+      const targetFolder = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'guiones');
       await mkdir(targetFolder, { recursive: true });
 
       const defaultFileName = `${script.title.replace(/\s+/g, '_') || 'Sin_titulo'}_${Date.now()}.pdf`;

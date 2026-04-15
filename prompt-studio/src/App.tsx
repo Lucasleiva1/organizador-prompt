@@ -421,6 +421,15 @@ export default function App() {
 
       await mkdir(projectPath, { recursive: true });
       await revealItemInDir([projectPath]);
+      
+      for (const scene of scenes) {
+        if (scene.asset) await AssetManager.deleteAsset(scene.asset);
+      }
+      saveScenes([]);
+      saveCharacters([]);
+      saveScripts([]);
+      setWorkspaces([{ id: crypto.randomUUID(), theme: 'normal' }]);
+
       setProjectName(folderName.trim());
       localStorage.setItem('ps-project-name', folderName.trim());
       setIsFolderModalOpen(false);
