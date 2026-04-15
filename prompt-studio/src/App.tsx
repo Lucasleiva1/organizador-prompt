@@ -399,6 +399,21 @@ export default function App() {
     }
     saveScenes(scenes.filter((s) => s.id !== id));
   };
+
+  const jumpToFirstScene = () => {
+    const firstScene = document.querySelector('[data-scene-card]');
+    if (firstScene) {
+      firstScene.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const jumpToLastScene = () => {
+    const scenes = document.querySelectorAll('[data-scene-card]');
+    if (scenes.length > 0) {
+      scenes[scenes.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
   const duplicateScene = (id: string) => {
     const scene = scenes.find(s => s.id === id);
     if (!scene) return;
@@ -476,6 +491,7 @@ export default function App() {
     }
   };
 
+
   const handleCreateProjectFolder = async () => {
     if (!folderName.trim()) return;
 
@@ -518,25 +534,22 @@ export default function App() {
       const parts = selectedPath.replace(/[/\\]+$/, '').split(/[/\\]/);
       const name = parts[parts.length - 1] || "Sin_Nombre";
 
-      // Setear nombre del proyecto
+      // Setear nombre del proyecto ANTES de cualquier operación
       setProjectName(name);
       localStorage.setItem('ps-project-name', name);
+      await AssetManager.init();
 
-      // Escanear todos los archivos .json dentro de la carpeta
+      // Escanear archivos .json
       const { readDir, readTextFile } = await import("@tauri-apps/plugin-fs");
-      const entries = await readDir(selectedPath);
       
       let loadedSomething = false;
 
-      for (const entry of entries) {
-        if (!entry.name || !entry.name.endsWith('.json')) continue;
-        
+      // Función que procesa un archivo JSON
+      const processJsonFile = async (filePath: string) => {
         try {
-          const fullPath = await join(selectedPath, entry.name);
-          const text = await readTextFile(fullPath);
+          const text = await readTextFile(filePath);
           const data = JSON.parse(text);
           
-          // Intentar cargar datos de proyecto (formato unificado)
           if (data.scenes && Array.isArray(data.scenes)) {
             await saveScenes(data.scenes);
             loadedSomething = true;
@@ -556,17 +569,42 @@ export default function App() {
           if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
             await saveStoryboardPanels(data.storyboardPanels);
             loadedSomething = true;
+          } else if (data.panels && Array.isArray(data.panels)) {
+            await saveStoryboardPanels(data.panels);
+            loadedSomething = true;
           }
+          
           if (typeof data.storyboardScript === "string") {
             await saveStoryboardScript(data.storyboardScript);
             loadedSomething = true;
           }
-          if (data.projectName && typeof data.projectName === "string") {
-            setProjectName(data.projectName);
-            localStorage.setItem('ps-project-name', data.projectName);
-          }
         } catch (fileErr) {
-          console.warn(`No se pudo leer ${entry.name}:`, fileErr);
+          console.warn(`No se pudo leer JSON:`, fileErr);
+        }
+      };
+
+      // Leer carpeta raíz
+      const entries = await readDir(selectedPath);
+      
+      for (const entry of entries) {
+        if (!entry.name) continue;
+        const fullPath = await join(selectedPath, entry.name);
+        
+        if (entry.name.endsWith('.json')) {
+          // JSON en la raíz
+          await processJsonFile(fullPath);
+        } else if (entry.isDirectory) {
+          // Buscar JSONs dentro de subcarpetas (1 nivel)
+          try {
+            const subEntries = await readDir(fullPath);
+            for (const subEntry of subEntries) {
+              if (!subEntry.name || !subEntry.name.endsWith('.json')) continue;
+              const subPath = await join(fullPath, subEntry.name);
+              await processJsonFile(subPath);
+            }
+          } catch (subErr) {
+            console.warn(`No se pudo leer subcarpeta ${entry.name}:`, subErr);
+          }
         }
       }
 
@@ -871,6 +909,24 @@ export default function App() {
                 Producción Final
               </h1>
               <p className="text-slate-500 text-[10px] font-black tracking-[0.3em] uppercase ml-14">Generación de Assets y Renderizado</p>
+            </div>
+            
+            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-2xl border border-white/10">
+              <button 
+                onClick={jumpToFirstScene}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 hover:bg-slate-700 text-[10px] font-black uppercase tracking-widest text-white/50 hover:text-white rounded-xl transition-all border border-white/5 hover:border-white/20"
+                title="Ir al inicio de la producción"
+              >
+                Primer Plano
+              </button>
+              <div className="w-px h-4 bg-white/10" />
+              <button 
+                onClick={jumpToLastScene}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-[10px] font-black uppercase tracking-widest text-emerald-400/70 hover:text-emerald-400 rounded-xl transition-all border border-emerald-500/10 hover:border-emerald-500/30"
+                title="Ir al último plano generado"
+              >
+                Último Plano
+              </button>
             </div>
           </div>
         )}
