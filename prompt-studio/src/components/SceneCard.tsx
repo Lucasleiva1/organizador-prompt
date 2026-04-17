@@ -191,7 +191,8 @@ export const SceneCard = ({
       : "w-full h-[400px]";
 
   return (
-    <div
+    <motion.div
+      data-scene-card
       id={scene.id}
       className={`group relative perspective-1000 ${containerClasses}`}
     >
@@ -513,6 +514,6 @@ export const SceneCard = ({
           </div>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };

@@ -41,3 +41,10 @@ export interface QwenPanel {
   timing: string;
   imageUrl?: string;
 }
+
+export interface Storyboard {
+  id: string;
+  folderNumber: number;
+  panels: QwenPanel[];
+  script: string;
+}

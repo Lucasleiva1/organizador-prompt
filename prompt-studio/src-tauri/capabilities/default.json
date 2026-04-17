@@ -16,6 +16,8 @@
     "fs:allow-desktop-write-recursive",
     "fs:allow-document-read-recursive",
     "fs:allow-document-write-recursive",
+    "fs:allow-read",
+    "fs:allow-write",
     "dialog:default",
     "core:path:default",
     "core:window:default",

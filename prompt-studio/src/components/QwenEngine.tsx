@@ -32,12 +32,16 @@ interface QwenEngineProps {
   setPanels: (panels: QwenPanel[]) => void;
   script: string;
   setScript: (script: string) => void;
+  storyboardId?: string;
+  storyboardIndex?: number;
+  storyboardTotal?: number;
+  folderNumber?: number;
+  onDeleteStoryboard?: () => void;
 }
 
-export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, panels, setPanels, script, setScript }) => {
+export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, panels, setPanels, script, setScript, storyboardIndex = 0, storyboardTotal = 1, folderNumber = 1, onDeleteStoryboard }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [projectName, setProjectName] = useState("Sin_Nombre");
   const [projectImages, setProjectImages] = useState<Record<number, string>>({});
   const [lastScanCount, setLastScanCount] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
@@ -45,9 +49,13 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
   const [isModalOpen, setIsModalOpen] = useState(false);
   const scanAttemptsRef = React.useRef(0);
 
-  // Auto-escaneo cuando cambia el nombre de proyecto (máx 2 intentos)
+  // Nombre y carpeta asignados automáticamente por número
+  const storyboardName = `Storyboard ${folderNumber}`;
+  const imagesFolderName = `Storyboard ${folderNumber}`;
+
+  // Auto-escaneo al montar y cuando cambia folderNumber (máx 2 intentos)
   React.useEffect(() => {
-    scanAttemptsRef.current = 0; // Resetear intentos al cambiar de proyecto
+    scanAttemptsRef.current = 0;
     
     const runAutoScan = async () => {
       if (scanAttemptsRef.current >= 2) return;
@@ -56,7 +64,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
 
     const timer = setTimeout(runAutoScan, 1500);
     return () => clearTimeout(timer);
-  }, [projectName]);
+  }, [folderNumber]);
 
   // Re-escanear cuando se agregan paneles nuevos
   React.useEffect(() => {
@@ -274,11 +282,9 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
 
 
   const scanProjectImages = async () => {
-    const name = projectName.trim() || "Sin_Nombre";
-    
     try {
       const docPath = await documentDir();
-      const targetFolder = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
+      const targetFolder = await join(docPath, AssetManager.getProjectRelativeBasePath(), imagesFolderName);
       const newImages: Record<number, string> = {};
 
       const collectImages = async (folderPath: string) => {
@@ -312,7 +318,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
       setProjectImages(newImages);
       setLastScanCount(Object.keys(newImages).length);
       setImageErrors({});
-      console.log(`[SCAN] ${Object.keys(newImages).length} imagenes encontradas para "${name}"`);
+      console.log(`[SCAN] ${Object.keys(newImages).length} imagenes encontradas para "${storyboardName}" (${imagesFolderName})`);
 
       if (!foundAny) {
         scanAttemptsRef.current += 1;
@@ -335,7 +341,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
   const openProjectFolder = async () => {
     try {
       const docPath = await documentDir();
-      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
+      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), imagesFolderName);
       await mkdir(projectDir, { recursive: true });
       await revealItemInDir(projectDir);
     } catch (e) {
@@ -353,7 +359,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
       if (!selected || typeof selected !== 'string') return;
 
       const docPath = await documentDir();
-      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
+      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), imagesFolderName);
       await mkdir(projectDir, { recursive: true });
 
       // Leemos el archivo original
@@ -381,7 +387,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
   const removeImageForPanel = async (sceneNum: number) => {
     try {
       const docPath = await documentDir();
-      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), 'images-storyboard');
+      const projectDir = await join(docPath, AssetManager.getProjectRelativeBasePath(), imagesFolderName);
 
       // Buscar y eliminar archivos con el numero de escena
       try {
@@ -601,21 +607,19 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
                 <BrainCircuit className="text-violet-500" size={36} />
               </div>
               Storyboard IA
+              {storyboardTotal > 1 && (
+                <span className="text-lg font-bold text-violet-400/60 ml-2">#{storyboardIndex + 1}</span>
+              )}
             </h1>
             <p className="text-slate-500 text-[10px] font-bold tracking-[0.3em] uppercase ml-14">Orquestador de Guiones Visuales</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 bg-[#0a0a0a] p-2.5 rounded-2xl border border-[#222]">
-            {/* Proyecto Selector */}
+            {/* Storyboard Identity */}
             <div className="flex flex-col px-4 border-r border-[#333]">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Proyecto Activo</span>
-              <input 
-                type="text" 
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                className="bg-transparent text-white font-semibold text-sm outline-none border-none focus:ring-0 transition-colors w-32"
-                placeholder="PROYECTO_ALPHA"
-              />
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Identificador</span>
+              <span className="text-white font-bold text-sm tracking-tight">{storyboardName}</span>
+              <span className="text-[8px] font-mono text-violet-400/50 mt-0.5">📁 {imagesFolderName}/</span>
             </div>
 
             {/* View Mode Selectors */}
@@ -727,6 +731,22 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
               <Trash2 size={16} />
               <span className="text-[10px] uppercase font-bold tracking-widest">Limpiar</span>
             </button>
+
+            {/* Eliminar Storyboard (solo si hay más de 1) */}
+            {onDeleteStoryboard && storyboardTotal > 1 && (
+              <button 
+                onClick={() => {
+                  if (confirm(`¿Eliminar este Storyboard (#${storyboardIndex + 1}) por completo?\nEsta acción no se puede deshacer.`)) {
+                    onDeleteStoryboard();
+                  }
+                }}
+                className="flex items-center gap-2 bg-red-600/20 hover:bg-red-600 border border-red-600/30 text-red-400 hover:text-white px-4 py-2.5 rounded font-bold transition-all"
+                title="Eliminar este Storyboard"
+              >
+                <Trash2 size={16} />
+                <span className="text-[10px] uppercase font-bold tracking-widest">Eliminar SB</span>
+              </button>
+            )}
           </div>
         </div>
 

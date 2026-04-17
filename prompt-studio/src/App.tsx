@@ -8,7 +8,7 @@ import { writeTextFile, mkdir } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
-import { Scene, Workspace, Character, Script, QwenPanel } from "./types";
+import { Scene, Workspace, Character, Script, QwenPanel, Storyboard } from "./types";
 import { WorkspaceInstance } from "./components/WorkspaceInstance";
 import { CharacterBar } from "./components/CharacterBar";
 import { AssetManager } from "./utils/AssetManager";
@@ -243,9 +243,8 @@ const useScriptStore = () => {
   return { scripts, saveScripts, loading };
 };
 
-const useStoryboardStore = () => {
-  const [panels, setPanels] = useState<QwenPanel[]>([]);
-  const [script, setScript] = useState<string>("");
+const useStoryboardsStore = () => {
+  const [storyboards, setStoryboards] = useState<Storyboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [store, setStore] = useState<any>(null);
 
@@ -253,13 +252,26 @@ const useStoryboardStore = () => {
     let mounted = true;
     const initStore = async () => {
       try {
-        const s = await load("storyboard.json", { autoSave: false, defaults: { panels: [], script: "" } });
+        const s = await load("storyboard.json", { autoSave: false, defaults: { storyboards: [] } });
         if (!mounted) return;
         setStore(s);
-        const savedPanels = await s.get<QwenPanel[]>("panels");
-        const savedScript = await s.get<string>("script");
-        if (mounted && savedPanels && Array.isArray(savedPanels)) setPanels(savedPanels);
-        if (mounted && typeof savedScript === "string") setScript(savedScript);
+        // Intentar cargar el nuevo formato (array de storyboards)
+        const savedStoryboards = await s.get<Storyboard[]>("storyboards");
+        if (mounted && savedStoryboards && Array.isArray(savedStoryboards) && savedStoryboards.length > 0) {
+          // Asegurar que todos tengan folderNumber (migración parcial)
+          const migrated = savedStoryboards.map((sb, i) => ({
+            ...sb,
+            folderNumber: sb.folderNumber || (i + 1)
+          }));
+          setStoryboards(migrated);
+        } else {
+          // Migración: cargar formato viejo (panels + script sueltos)
+          const savedPanels = await s.get<QwenPanel[]>("panels");
+          const savedScript = await s.get<string>("script");
+          if (mounted && savedPanels && Array.isArray(savedPanels) && savedPanels.length > 0) {
+            setStoryboards([{ id: crypto.randomUUID(), folderNumber: 1, panels: savedPanels, script: savedScript || "" }]);
+          }
+        }
       } catch (e) {
         console.error("Error loading storyboard internal store:", e);
       } finally {
@@ -270,21 +282,40 @@ const useStoryboardStore = () => {
     return () => { mounted = false; };
   }, []);
 
-  const saveStoryboardPanels = async (newPanels: QwenPanel[]) => {
-    setPanels(newPanels);
+  const saveStoryboards = async (newStoryboards: Storyboard[]) => {
+    setStoryboards(newStoryboards);
     if (store) {
-      try { await store.set("panels", newPanels); await store.save(); } catch (e) { console.error("Error saving panels:", e); }
-    }
-  };
-  
-  const saveStoryboardScript = async (newScript: string) => {
-    setScript(newScript);
-    if (store) {
-      try { await store.set("script", newScript); await store.save(); } catch (e) { console.error("Error saving script:", e); }
+      try { await store.set("storyboards", newStoryboards); await store.save(); } catch (e) { console.error("Error saving storyboards:", e); }
     }
   };
 
-  return { panels, script, saveStoryboardPanels, saveStoryboardScript, loading };
+  const getNextFolderNumber = () => {
+    if (storyboards.length === 0) return 1;
+    return Math.max(...storyboards.map(sb => sb.folderNumber || 1)) + 1;
+  };
+
+  const addStoryboard = async () => {
+    const nextNum = getNextFolderNumber();
+    const newSb: Storyboard = { id: crypto.randomUUID(), folderNumber: nextNum, panels: [], script: "" };
+    await saveStoryboards([...storyboards, newSb]);
+  };
+
+  const updateStoryboard = async (id: string, data: Partial<Storyboard>) => {
+    const updated = storyboards.map(sb => sb.id === id ? { ...sb, ...data } : sb);
+    await saveStoryboards(updated);
+  };
+
+  const deleteStoryboard = async (id: string) => {
+    const sb = storyboards.find(s => s.id === id);
+    if (storyboards.length <= 1) {
+      // Si es el último, solo lo limpiamos pero conservamos folderNumber
+      await saveStoryboards([{ id, folderNumber: sb?.folderNumber || 1, panels: [], script: "" }]);
+      return;
+    }
+    await saveStoryboards(storyboards.filter(s => s.id !== id));
+  };
+
+  return { storyboards, saveStoryboards, addStoryboard, updateStoryboard, deleteStoryboard, loading };
 };
 
 export default function App() {
@@ -292,7 +323,7 @@ export default function App() {
   const { workspaces, setWorkspaces, loading: loadingWorkspaces } = useWorkspaceStore();
   const { characters, saveCharacters, addCharacter, deleteCharacter } = useCharacterStore();
   const { scripts, saveScripts, loading: loadingScripts } = useScriptStore();
-  const { panels: storyboardPanels, script: storyboardScript, saveStoryboardPanels, saveStoryboardScript, loading: _loadingStoryboard } = useStoryboardStore();
+  const { storyboards, saveStoryboards, addStoryboard, updateStoryboard, deleteStoryboard, loading: _loadingStoryboard } = useStoryboardsStore();
   const { settings, saveSettings } = useSettingsStore();
 
   const [isTranslateEn] = useState(false);
@@ -445,8 +476,7 @@ export default function App() {
         workspaces, 
         scripts,
         characters,
-        storyboardPanels,
-        storyboardScript 
+        storyboards 
       }, null, 2);
       await writeTextFile(filePath, projectData);
     } catch (err) {
@@ -477,12 +507,11 @@ export default function App() {
       if (data.scripts && Array.isArray(data.scripts)) await saveScripts(data.scripts);
       if (data.characters && Array.isArray(data.characters)) await saveCharacters(data.characters);
       
-      if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
-        await saveStoryboardPanels(data.storyboardPanels);
-      }
-      
-      if (typeof data.storyboardScript === "string") {
-        await saveStoryboardScript(data.storyboardScript);
+      if (data.storyboards && Array.isArray(data.storyboards)) {
+        await saveStoryboards(data.storyboards);
+      } else if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
+        // Compatibilidad con formato viejo
+        await saveStoryboards([{ id: crypto.randomUUID(), folderNumber: 1, panels: data.storyboardPanels, script: data.storyboardScript || "" }]);
       }
       
     } catch (err) {
@@ -566,16 +595,14 @@ export default function App() {
             await saveCharacters(data.characters);
             loadedSomething = true;
           }
-          if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
-            await saveStoryboardPanels(data.storyboardPanels);
+          if (data.storyboards && Array.isArray(data.storyboards)) {
+            await saveStoryboards(data.storyboards);
+            loadedSomething = true;
+          } else if (data.storyboardPanels && Array.isArray(data.storyboardPanels)) {
+            await saveStoryboards([{ id: crypto.randomUUID(), folderNumber: 1, panels: data.storyboardPanels, script: data.storyboardScript || "" }]);
             loadedSomething = true;
           } else if (data.panels && Array.isArray(data.panels)) {
-            await saveStoryboardPanels(data.panels);
-            loadedSomething = true;
-          }
-          
-          if (typeof data.storyboardScript === "string") {
-            await saveStoryboardScript(data.storyboardScript);
+            await saveStoryboards([{ id: crypto.randomUUID(), folderNumber: 1, panels: data.panels, script: "" }]);
             loadedSomething = true;
           }
         } catch (fileErr) {
@@ -883,13 +910,35 @@ export default function App() {
         deleteCharacter={deleteCharacter} 
       />
 
-      <QwenEngine 
-        onAddGeneratedScenes={addGeneratedScenes}
-        panels={storyboardPanels}
-        setPanels={(p) => saveStoryboardPanels(p)}
-        script={storyboardScript}
-        setScript={(s) => saveStoryboardScript(s)}
-      />
+      {/* Storyboards Múltiples */}
+      {storyboards.map((sb, idx) => (
+        <QwenEngine 
+          key={sb.id}
+          storyboardId={sb.id}
+          storyboardIndex={idx}
+          storyboardTotal={storyboards.length}
+          folderNumber={sb.folderNumber}
+          onAddGeneratedScenes={addGeneratedScenes}
+          panels={sb.panels}
+          setPanels={(p) => updateStoryboard(sb.id, { panels: p })}
+          script={sb.script}
+          setScript={(s) => updateStoryboard(sb.id, { script: s })}
+          onDeleteStoryboard={() => deleteStoryboard(sb.id)}
+        />
+      ))}
+
+      {/* Botón Agregar Storyboard */}
+      <div className="max-w-[1600px] mx-auto px-4 lg:px-6 pb-6">
+        <button
+          onClick={addStoryboard}
+          className="w-full flex items-center justify-center gap-4 py-6 bg-[#0a0a0a] border-2 border-dashed border-violet-500/20 hover:border-violet-500/50 rounded-2xl transition-all duration-300 group hover:bg-violet-500/5"
+        >
+          <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl group-hover:scale-110 group-hover:bg-violet-500/20 transition-all duration-300">
+            <Plus size={24} className="text-violet-400" />
+          </div>
+          <span className="text-sm font-black text-violet-400/60 uppercase tracking-[0.3em] group-hover:text-violet-400 transition-colors">Agregar Storyboard</span>
+        </button>
+      </div>
 
 
 
