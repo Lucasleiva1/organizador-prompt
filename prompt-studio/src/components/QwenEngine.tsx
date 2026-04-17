@@ -14,7 +14,9 @@ import {
   X,
   Sparkles,
   Database,
-  Upload
+  Upload,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
@@ -45,9 +47,22 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
   const [projectImages, setProjectImages] = useState<Record<number, string>>({});
   const [lastScanCount, setLastScanCount] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
-  const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'vertical' | 'carousel'>('carousel');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const scanAttemptsRef = React.useRef(0);
+
+  // Modal de confirmación de borrado
+  const [deleteModalConfig, setDeleteModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
+
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    setDeleteModalConfig({ isOpen: true, title, message, onConfirm });
+  };
 
   // Nombre y carpeta asignados automáticamente por número
   const storyboardName = `Storyboard ${folderNumber}`;
@@ -99,8 +114,14 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
   };
 
   const handleRemovePanel = (index: number) => {
-    const newPanels = panels.filter((_, i) => i !== index);
-    setPanels(newPanels);
+    confirmAction(
+      "Eliminar Plano",
+      `¿Estás seguro de que quieres eliminar el plano #${index + 1}? El archivo de imagen se conservará en el sistema, pero el panel se borrará del Storyboard.`,
+      () => {
+        const newPanels = panels.filter((_, i) => i !== index);
+        setPanels(newPanels);
+      }
+    );
   };
 
   const parseCSVLine = (line: string): string[] => {
@@ -546,7 +567,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
       if (!filePath) return;
       
       const data = JSON.stringify({
-        projectName,
+        projectName: storyboardName,
         panels,
         timestamp: new Date().toISOString()
       }, null, 2);
@@ -558,8 +579,7 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
       alert("No se pudo guardar el archivo JSON.");
     }
   };
-
-    const loadStoryboardJSON = async () => {
+  const loadStoryboardJSON = async () => {
     try {
       const filePath = await openFileDialog({
         title: "Cargar Datos Storyboard (JSON)",
@@ -573,7 +593,6 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
       const data = JSON.parse(text);
       
       if (data.panels && Array.isArray(data.panels)) {
-        if (data.projectName) setProjectName(data.projectName);
         setPanels(data.panels);
         alert("Storyboard cargado correctamente.");
       } else {
@@ -610,11 +629,18 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
               {storyboardTotal > 1 && (
                 <span className="text-lg font-bold text-violet-400/60 ml-2">#{storyboardIndex + 1}</span>
               )}
+              <button 
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="ml-4 p-2 rounded-full bg-white/5 hover:bg-violet-500/20 text-slate-400 hover:text-violet-400 transition-all"
+                title={isCollapsed ? "Expandir Storyboard" : "Colapsar Storyboard"}
+              >
+                {isCollapsed ? <ChevronDown size={24} /> : <ChevronUp size={24} />}
+              </button>
             </h1>
             <p className="text-slate-500 text-[10px] font-bold tracking-[0.3em] uppercase ml-14">Orquestador de Guiones Visuales</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 bg-[#0a0a0a] p-2.5 rounded-2xl border border-[#222]">
+          <div className={`flex flex-wrap items-center gap-4 bg-[#0a0a0a] p-2.5 rounded-2xl border border-[#222] transition-opacity duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none absolute right-0' : 'opacity-100'}`}>
             {/* Storyboard Identity */}
             <div className="flex flex-col px-4 border-r border-[#333]">
               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Identificador</span>
@@ -716,13 +742,13 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
             {/* Limpiar Storyboard */}
             <button 
               onClick={() => {
-                if (confirm("¿Limpiar el Storyboard completo?\nLos paneles, guion y datos se eliminarán. Las imágenes seguirán en tu carpeta.")) {
+                confirmAction("Limpiar Storyboard", "¿Limpiar el Storyboard completo?\nLos paneles, guion y datos se eliminarán de este panel. Las imágenes seguirán en tu carpeta.", () => {
                   setPanels([]);
                   setScript("");
                   setProjectImages({});
                   setLastScanCount(null);
                   setImageErrors({});
-                }
+                });
               }}
               disabled={panels.length === 0 && !script.trim()}
               className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500 border border-red-500/20 text-red-400 hover:text-white px-4 py-2.5 rounded font-bold transition-all disabled:opacity-20 disabled:cursor-not-allowed"
@@ -736,9 +762,9 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
             {onDeleteStoryboard && storyboardTotal > 1 && (
               <button 
                 onClick={() => {
-                  if (confirm(`¿Eliminar este Storyboard (#${storyboardIndex + 1}) por completo?\nEsta acción no se puede deshacer.`)) {
+                  confirmAction("Eliminar Storyboard", `¿Eliminar este Storyboard (#${storyboardIndex + 1}) por completo?\nEsta acción no se puede deshacer y el storyboard desaparecerá.`, () => {
                     onDeleteStoryboard();
-                  }
+                  });
                 }}
                 className="flex items-center gap-2 bg-red-600/20 hover:bg-red-600 border border-red-600/30 text-red-400 hover:text-white px-4 py-2.5 rounded font-bold transition-all"
                 title="Eliminar este Storyboard"
@@ -750,7 +776,10 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
           </div>
         </div>
 
-        {/* EMPTY STATE OR MAIN CONTENT */}
+        {/* COLLAPSED / EXPANDED CONTENT WRAPPER */}
+        {!isCollapsed ? (
+          <>
+            {/* EMPTY STATE OR MAIN CONTENT */}
         {panels.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 bg-slate-900/20 border-2 border-dashed border-white/5 rounded-[3rem] group hover:border-violet-500/20 transition-all duration-700">
             <div className="relative mb-8">
@@ -844,6 +873,29 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
               </div>
             )}
 
+          </div>
+        )}
+          </>
+        ) : (
+          /* COLLAPSED STRIP VIEW */
+          <div className="w-full flex overflow-x-auto gap-4 py-4 px-2 pb-8 scrollbar-thin scrollbar-thumb-violet-500/20 hover:scrollbar-thumb-violet-500/50 scrollbar-track-transparent flex-row">
+            {panels.length === 0 ? (
+              <div className="w-full text-center py-4 opacity-50 px-8 flex items-center justify-center">
+                 <span className="text-slate-500 text-xs tracking-widest font-bold uppercase">Sin paneles registrados</span>
+              </div>
+            ) : (
+              panels.map((p, index) => {
+                const imgUrl = projectImages[p.scene];
+                return (
+                  <div key={index} className="flex-shrink-0 h-32 w-auto min-w-[80px] bg-[#0a0a0a] rounded-lg border border-[#222] overflow-hidden flex items-center justify-center snap-center">
+                    {imgUrl && !imageErrors[p.scene] ? (
+                      <img src={imgUrl} alt={`Panel ${index + 1}`} className="h-full w-auto object-contain" />
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+            <div className="flex-shrink-0 w-8"></div>
           </div>
         )}
       </div>
@@ -956,6 +1008,60 @@ export const QwenEngine: React.FC<QwenEngineProps> = ({ onAddGeneratedScenes, pa
                     <BrainCircuit size={18} /> Procesar Guion
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+
+      {/* CONFIRMATION MODAL (Delete / Clear) */}
+      <AnimatePresence>
+        {deleteModalConfig.isOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+              className="absolute inset-0 bg-black/85 backdrop-blur-lg"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.85, y: 30 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative w-full max-w-md bg-[#111] border border-[#2a2a2a] rounded-2xl overflow-hidden shadow-2xl"
+            >
+              <div className="px-8 pt-8 pb-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl">
+                    <Trash2 size={20} className="text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                    {deleteModalConfig.title}
+                  </h3>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-line">
+                  {deleteModalConfig.message}
+                </p>
+              </div>
+              <div className="px-8 pb-8 pt-4 flex gap-3">
+                <button
+                  onClick={() => setDeleteModalConfig(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 px-6 py-3.5 bg-[#1a1a1a] hover:bg-[#252525] text-slate-300 hover:text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-[#333] hover:border-[#444]"
+                >
+                  No, Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    deleteModalConfig.onConfirm();
+                    setDeleteModalConfig(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className="flex-1 px-6 py-3.5 bg-red-600/80 hover:bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-red-500/50 hover:border-red-400 shadow-lg shadow-red-500/10"
+                >
+                  Si, Confirmar
+                </button>
               </div>
             </motion.div>
           </div>
